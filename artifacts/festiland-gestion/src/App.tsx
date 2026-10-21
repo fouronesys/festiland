@@ -137,8 +137,12 @@ function AppShell({ me }: { me: TeamUser }) {
       }
       toast({ title: 'Cambios guardados', description: 'La información quedó actualizada.' });
       setModal(false); form.reset();
-    } catch {
-      toast({ title: 'No se pudo guardar', description: 'Revisa los datos e inténtalo de nuevo.', variant: 'destructive' });
+    } catch (error) {
+      toast({
+        title: 'No se pudo guardar',
+        description: apiErrorMessage(error) || 'Revisa los datos e inténtalo de nuevo.',
+        variant: 'destructive',
+      });
     }
   });
   const busy = createAdjustment.isPending || createCustomer.isPending || createSupplier.isPending || createExpense.isPending || createAccount.isPending || createPurchase.isPending;
@@ -213,14 +217,15 @@ function AppShell({ me }: { me: TeamUser }) {
     </div>
     {modal && <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#153638]/45 p-0 backdrop-blur-sm sm:items-center sm:p-4" onMouseDown={e => { if (e.target === e.currentTarget) setModal(false); }}>
       <section className="max-h-[94dvh] w-full overflow-y-auto rounded-t-[24px] bg-[#fffdf8] p-5 shadow-2xl sm:max-w-xl sm:rounded-[24px] sm:p-7" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-        <div className="mb-5 flex items-start justify-between"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-[#bd4778]">Festiland · Gestión</p><h2 id="modal-title" className="mt-1 text-2xl font-bold">{addLabel[activePath]}</h2></div><button onClick={() => setModal(false)} aria-label="Cerrar" className="rounded-lg p-2 hover:bg-[#f4f0e7]" data-testid="button-close-modal"><X size={20}/></button></div>
+        <div className="mb-5 flex items-start justify-between"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-[#bd4778]">Festiland · Gestión</p><h2 id="modal-title" className="mt-1 text-2xl font-bold">{addLabel[activePath]}</h2>{activePath === '/purchases' && <p className="mt-2 max-w-md text-sm font-normal text-[#788684]">Registra productos físicos activos y un costo unitario mayor que cero; los servicios se registran como gastos.</p>}</div><button onClick={() => setModal(false)} aria-label="Cerrar" className="rounded-lg p-2 hover:bg-[#f4f0e7]" data-testid="button-close-modal"><X size={20}/></button></div>
         <Form {...form}><form onSubmit={submitModal} className="grid gap-4 sm:grid-cols-2">{currentFields.map(field => {
           let options = field.options || [];
-          if (field.name === 'productId') options = products.map((p: any) => `${p.id}|${p.name}`);
+          if (field.name === 'productId') options = products.filter((p: any) => p.active && p.productType !== 'service').map((p: any) => `${p.id}|${p.name}`);
           if (field.name === 'supplierId') options = suppliers.map((p: any) => `${p.id}|${p.name}`);
           if (field.name === 'accountId') options = accounts.map((a: any) => `${a.id}|${a.code} · ${a.name}`);
           const span = ['description', 'address', 'notes', 'note'].includes(field.name);
-          return <label key={field.name} className={`${span ? 'sm:col-span-2' : ''} grid gap-1.5 text-sm font-semibold text-[#43585a]`}><span>{field.label}{field.required && <em className="text-[#bd4778]"> *</em>}</span>{options.length ? <select {...form.register(field.name, { required: field.required })} className="h-11 rounded-xl border border-[#ded8cc] bg-white px-3 font-normal outline-none focus:border-[#bd4778]" data-testid={`select-${field.name}`}><option value="">Selecciona...</option>{options.map(option => { const [val, label] = option.includes('|') ? option.split('|') : [option, option]; return <option key={val} value={val}>{field.name === 'productType' ? val === 'product' ? 'Producto' : 'Servicio' : field.name === 'reason' ? reasonText(val) : field.name === 'role' ? roleName(val) : field.name === 'paymentMethod' ? paymentName(val) : label}</option>; })}</select> : <Input {...form.register(field.name, { required: field.required, valueAsNumber: field.type === 'number' })} type={field.type || 'text'} step={field.type === 'number' ? '0.01' : undefined} placeholder={field.placeholder || ''} className="h-11 border-[#ded8cc] bg-white" data-testid={`input-${field.name}`}/>}</label>;
+          const isSelect = Array.isArray(field.options) || ['productId', 'supplierId', 'accountId'].includes(field.name);
+          return <label key={field.name} className={`${span ? 'sm:col-span-2' : ''} grid gap-1.5 text-sm font-semibold text-[#43585a]`}><span>{field.label}{field.required && <em className="text-[#bd4778]"> *</em>}</span>{isSelect ? <select {...form.register(field.name, { required: field.required })} className="h-11 rounded-xl border border-[#ded8cc] bg-white px-3 font-normal outline-none focus:border-[#bd4778]" data-testid={`select-${field.name}`}><option value="">{field.name === 'productId' && !options.length ? 'No hay productos físicos activos' : field.name === 'supplierId' && !options.length ? 'No hay proveedores registrados' : 'Selecciona...'}</option>{options.map(option => { const [val, label] = option.includes('|') ? option.split('|') : [option, option]; return <option key={val} value={val}>{field.name === 'productType' ? val === 'product' ? 'Producto' : 'Servicio' : field.name === 'reason' ? reasonText(val) : field.name === 'role' ? roleName(val) : field.name === 'paymentMethod' ? paymentName(val) : label}</option>; })}</select> : <Input {...form.register(field.name, { required: field.required, valueAsNumber: field.type === 'number' })} type={field.type || 'text'} step={field.type === 'number' ? '0.01' : undefined} min={field.name === 'quantity' ? '0.01' : field.name === 'unitCost' ? '0.01' : undefined} placeholder={field.placeholder || ''} className="h-11 border-[#ded8cc] bg-white" data-testid={`input-${field.name}`}/>}</label>;
         })}<div className="mt-2 flex gap-3 sm:col-span-2"><Button type="button" variant="outline" onClick={() => setModal(false)} className="h-12 flex-1" data-testid="button-cancel">Cancelar</Button><Button disabled={busy} type="submit" className="h-12 flex-1 bg-[#bd4778] font-bold hover:bg-[#a83968]" data-testid="button-save">{busy ? 'Guardando…' : 'Guardar'}</Button></div></form></Form>
       </section>
     </div>}
@@ -553,6 +558,13 @@ function roleName(value: string) { return ({ owner: 'Propietario', manager: 'Ger
 function paymentName(value: string) { return ({ cash: 'Efectivo', card: 'Tarjeta', transfer: 'Transferencia', credit: 'Crédito', payable: 'Por pagar' } as any)[value] || value; }
 function typeName(value: string) { return ({ asset: 'Activo', liability: 'Pasivo', equity: 'Patrimonio', revenue: 'Ingreso', expense: 'Gasto' } as any)[value] || value; }
 function subtitle(path: string) { return ({ '/products': 'Un catálogo organizado, listo para la caja', '/sales': 'Recibos y devoluciones', '/inventory': 'Existencias y movimientos', '/customers': 'Personas que celebran contigo', '/suppliers': 'Socios que hacen posible la tienda', '/purchases': 'Abastecimiento y recepción', '/expenses': 'Salidas de caja del comercio', '/taxes': 'Configura las tasas aplicables', '/team': 'Accesos y responsabilidades' } as any)[path] || 'Operación del comercio'; }
+function apiErrorMessage(error: unknown) {
+  if (error && typeof error === 'object' && 'data' in error) {
+    const data = (error as { data?: unknown }).data;
+    if (data && typeof data === 'object' && 'error' in data && typeof data.error === 'string') return data.error;
+  }
+  return error instanceof Error ? error.message : '';
+}
 
 function ProtectedShell() {
   return <AuthGate>{user => <AppShell me={user}/>}</AuthGate>;
