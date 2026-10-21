@@ -32,6 +32,17 @@ function isValidPickupTime(value: string | null | undefined) {
   return value == null || /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
 }
 
+function isPickupTimeFuture(date: string, time: string | null | undefined, today: string) {
+  if (date !== today || !time) return true;
+  const currentTime = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "America/Santo_Domingo",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date());
+  return time > currentTime;
+}
+
 function orderResponse(
   order: typeof ordersTable.$inferSelect,
   lines: (typeof orderLinesTable.$inferSelect)[],
@@ -131,6 +142,10 @@ router.post(
     }
     if (!isValidPickupTime(parsed.data.pickupTime)) {
       res.status(400).json({ error: "La hora de recogida no es válida." });
+      return;
+    }
+    if (!isPickupTimeFuture(pickupDate, parsed.data.pickupTime, today)) {
+      res.status(400).json({ error: "La hora de recogida debe ser posterior a la hora actual de República Dominicana." });
       return;
     }
     if (new Set(parsed.data.items.map(item => item.productId)).size !== parsed.data.items.length) {
@@ -313,8 +328,8 @@ router.patch(
     }
     const today = localAccountingDate();
     const pickupDate = parsed.data.pickupDate?.toISOString().slice(0, 10);
-    if (pickupDate && (!validCalendarDate(pickupDate) || pickupDate < today)) {
-      res.status(400).json({ error: "La fecha de recogida debe ser hoy o una fecha futura válida." });
+    if (pickupDate && !validCalendarDate(pickupDate)) {
+      res.status(400).json({ error: "La fecha de recogida no es válida." });
       return;
     }
     if (!isValidPickupTime(parsed.data.pickupTime)) {
@@ -327,6 +342,14 @@ router.patch(
       if (!current) return { error: "No encontramos ese pedido." as const };
       if (current.status !== "pending" && current.status !== "ready") {
         return { error: "Solo puedes reprogramar pedidos pendientes o listos para recoger." as const };
+      }
+      const effectivePickupDate = pickupDate ?? current.pickupDate;
+      const effectivePickupTime = parsed.data.pickupTime !== undefined ? parsed.data.pickupTime : current.pickupTime;
+      if (!validCalendarDate(effectivePickupDate) || effectivePickupDate < today) {
+        return { error: "La fecha de recogida debe ser hoy o una fecha futura válida." as const };
+      }
+      if (!isPickupTimeFuture(effectivePickupDate, effectivePickupTime, today)) {
+        return { error: "La hora de recogida debe ser posterior a la hora actual de República Dominicana." as const };
       }
       const [updated] = await tx.update(ordersTable).set({
         ...(pickupDate !== undefined ? { pickupDate } : {}),

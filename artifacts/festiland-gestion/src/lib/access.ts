@@ -60,6 +60,23 @@ export function downloadCsv(filename: string, rows: (string | number | null | un
 
 export const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 export const money = (value?: number | null) => new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', maximumFractionDigits: 2 }).format(value || 0);
-export const dateLabel = (value?: string | null) => value ? new Intl.DateTimeFormat('es-DO', { dateStyle: 'medium', timeZone: 'America/Santo_Domingo' }).format(new Date(value)) : '—';
-export const dateTimeLabel = (value?: string | null) => value ? new Intl.DateTimeFormat('es-DO', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Santo_Domingo' }).format(new Date(value)) : '—';
+export const dateLabel = (value?: string | null) => value ? new Intl.DateTimeFormat('es-DO', { dateStyle: 'medium', timeZone: 'America/Santo_Domingo' }).format(new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00.000Z` : value)) : '—';
+export const dateTimeLabel = (value?: string | null) => value ? new Intl.DateTimeFormat('es-DO', { dateStyle: 'short', timeStyle: 'short', hourCycle: 'h12', timeZone: 'America/Santo_Domingo' }).format(new Date(value)) : '—';
 export const todayDO = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santo_Domingo' }).format(new Date());
+export const pickupTimeLabel = (value?: string | null) => {
+  if (!value || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) return 'Sin hora';
+  const [hours, minutes] = value.split(':').map(Number);
+  const period = hours >= 12 ? 'p. m.' : 'a. m.';
+  return `${hours % 12 || 12}:${String(minutes).padStart(2, '0')} ${period}`;
+};
+export const isPickupScheduleValid = (date: string, time?: string | null) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  const parsedDate = new Date(`${date}T00:00:00.000Z`);
+  if (!Number.isFinite(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== date || date < todayDO()) return false;
+  if (time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return false;
+  if (date !== todayDO() || !time) return true;
+  const now = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'America/Santo_Domingo', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).format(new Date());
+  return time > now;
+};

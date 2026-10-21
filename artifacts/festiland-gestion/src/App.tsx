@@ -30,9 +30,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form } from '@/components/ui/form';
 import { LoadingBlock, ErrorBlock, EmptyState } from '@/components/states';
-import { can, homeFor, downloadCsv, todayDO, roundMoney, money, dateLabel, type Role } from '@/lib/access';
+import { can, homeFor, downloadCsv, todayDO, roundMoney, money, dateLabel, isPickupScheduleValid, type Role } from '@/lib/access';
 import { Receipt, useStoreSettings } from '@/features/receipt';
 import { OrdersPage } from '@/features/orders-page';
+import { PickupTimeField } from '@/features/pickup-time-field';
 import { SettingsPage } from '@/features/settings-page';
 import { CashBar } from '@/features/cash-panel';
 import { ProductEditor, TaxEditor } from '@/features/editors';
@@ -288,6 +289,10 @@ function PosPage({ products, productsLoading, customers, taxRates, createSale, i
   const submitScheduledOrder = (event: FormEvent) => {
     event.preventDefault();
     const deposit = advanceAmount;
+    if (!isPickupScheduleValid(pickupDate, pickupTime)) {
+      toast({ title: 'Fecha u hora no válida', description: 'La recogida debe ser hoy o más adelante; si es hoy, elige una hora futura.', variant: 'destructive' });
+      return;
+    }
     if (!items.length || !pickupDate || deposit < 0 || deposit > grandTotal || advanceNeedsCustomer || stockShortage) return;
     if (deposit > 0 && !['cash', 'card', 'transfer'].includes(advanceMethod)) return;
     createOrder.mutate({
@@ -344,7 +349,8 @@ function PosPage({ products, productsLoading, customers, taxRates, createSale, i
         <div className="mb-5 flex items-start justify-between"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-[#bd4778]">Festiland · Agenda</p><h3 id="schedule-create-title" className="mt-1 text-2xl font-bold">Programar recogida</h3><p className="mt-1 text-sm text-[#788684]">El servidor fija precios e impuestos y reserva las existencias al guardar.</p></div><button type="button" disabled={createOrder.isPending} onClick={() => setScheduleOpen(false)} aria-label="Cerrar" className="rounded-lg p-2 hover:bg-[#f4f0e7]" data-testid="button-close-create-order"><X size={20}/></button></div>
         <form onSubmit={submitScheduledOrder} className="grid gap-4 sm:grid-cols-2">
           <label className="grid gap-1.5 text-sm font-semibold">Fecha de recogida<Input required type="date" min={todayDO()} value={pickupDate} onChange={event => setPickupDate(event.target.value)} className="h-11 border-[#ded8cc] bg-white" data-testid="input-schedule-date"/></label>
-          <label className="grid gap-1.5 text-sm font-semibold">Hora opcional<Input type="time" value={pickupTime} onChange={event => setPickupTime(event.target.value)} className="h-11 border-[#ded8cc] bg-white" data-testid="input-schedule-time"/></label>
+          <div className="grid gap-1.5 text-sm font-semibold"><span>Hora opcional · 12 horas</span><PickupTimeField value={pickupTime} onChange={setPickupTime} testId="input-schedule-time"/></div>
+          {!isPickupScheduleValid(pickupDate, pickupTime) && <p role="alert" className="text-sm font-semibold text-[#a4474d] sm:col-span-2" data-testid="text-schedule-date-time-error">La recogida debe ser hoy o más adelante; si es hoy, elige una hora futura.</p>}
           <label className="grid gap-1.5 text-sm font-semibold">Avance opcional (DOP)<Input type="number" min="0" max={grandTotal} step="0.01" value={advance} onChange={event => setAdvance(event.target.value)} placeholder="0.00" className="h-11 border-[#ded8cc] bg-white" data-testid="input-schedule-advance"/></label>
           <label className="grid gap-1.5 text-sm font-semibold">Método del avance<select value={advanceMethod} onChange={event => setAdvanceMethod(event.target.value)} disabled={!(Number(advance) > 0)} className="h-11 rounded-xl border border-[#ded8cc] bg-white px-3 text-sm font-normal disabled:opacity-50" data-testid="select-schedule-advance-method">{[['cash', 'Efectivo'], ['card', 'Tarjeta'], ['transfer', 'Transferencia']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
           <label className="grid gap-1.5 text-sm font-semibold sm:col-span-2">Nota del pedido<textarea maxLength={1000} value={orderNote} onChange={event => setOrderNote(event.target.value)} rows={3} placeholder="Detalles para preparar la celebración" className="resize-y rounded-xl border border-[#ded8cc] bg-white px-3 py-2 text-sm font-normal outline-none focus:border-[#bd4778]" data-testid="input-schedule-note"/></label>
@@ -352,7 +358,7 @@ function PosPage({ products, productsLoading, customers, taxRates, createSale, i
           {advanceExceedsTotal && <p role="alert" className="text-sm font-semibold text-[#a4474d] sm:col-span-2" data-testid="text-order-advance-exceeds-total">El anticipo no puede superar el total del pedido ({money(grandTotal)}).</p>}
           {stockShortage && <p role="alert" className="text-sm font-semibold text-[#a4474d] sm:col-span-2" data-testid="text-order-stock-shortage">La disponibilidad cambió; ajusta las cantidades antes de guardar.</p>}
           <div className="rounded-xl bg-[#f3f6f1] p-3 text-sm text-[#56716b] sm:col-span-2">La caja mantiene el carrito abierto si cierras este formulario. El monto final del pedido lo confirma el servidor.</div>
-          <div className="flex gap-3 sm:col-span-2"><Button type="button" variant="outline" disabled={createOrder.isPending} onClick={() => setScheduleOpen(false)} className="h-12 flex-1" data-testid="button-dismiss-create-order">Volver al carrito</Button><Button type="submit" disabled={createOrder.isPending || !items.length || !pickupDate || advanceNeedsCustomer || advanceExceedsTotal || stockShortage} className="h-12 flex-1 bg-[#bd4778] font-bold hover:bg-[#a83968]" data-testid="button-submit-order">{createOrder.isPending ? 'Guardando…' : 'Guardar pedido'}</Button></div>
+          <div className="flex gap-3 sm:col-span-2"><Button type="button" variant="outline" disabled={createOrder.isPending} onClick={() => setScheduleOpen(false)} className="h-12 flex-1" data-testid="button-dismiss-create-order">Volver al carrito</Button><Button type="submit" disabled={createOrder.isPending || !items.length || !isPickupScheduleValid(pickupDate, pickupTime) || advanceNeedsCustomer || advanceExceedsTotal || stockShortage} className="h-12 flex-1 bg-[#bd4778] font-bold hover:bg-[#a83968]" data-testid="button-submit-order">{createOrder.isPending ? 'Guardando…' : 'Guardar pedido'}</Button></div>
         </form>
       </section>
     </div>}
