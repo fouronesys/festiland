@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   getGetDashboardQueryKey, getListOrdersQueryKey, getListProductsQueryKey, getListSalesQueryKey,
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { EmptyState, ErrorBlock, LoadingBlock } from '@/components/states';
 import { dateLabel, dateTimeLabel, money, roundMoney, type Role } from '@/lib/access';
+import { Receipt } from '@/features/receipt';
 import { useToast } from '@/hooks/use-toast';
 
 type PaymentLine = { method: 'cash' | 'card' | 'transfer' | 'credit'; amount: string };
@@ -31,6 +32,8 @@ export function OrdersPage({ role }: { role: Role }) {
   const [scheduleTime, setScheduleTime] = useState('');
   const [scheduleNote, setScheduleNote] = useState('');
   const [convertOrder, setConvertOrder] = useState<any>(null);
+  const [saleReceipt, setSaleReceipt] = useState<any>(null);
+  const [autoPrintReceipt, setAutoPrintReceipt] = useState(false);
   const [payments, setPayments] = useState<PaymentLine[]>([]);
   const [cancelOrder, setCancelOrder] = useState<any>(null);
   const queryParams = useMemo(() => ({ search: search.trim() || undefined, status: status || undefined }), [search, status]);
@@ -42,6 +45,15 @@ export function OrdersPage({ role }: { role: Role }) {
   const canOperate = ['owner', 'manager', 'cashier'].includes(role);
   const canCancel = ['owner', 'manager'].includes(role);
   const orders = query.data || [];
+  useEffect(() => {
+    if (!saleReceipt || !autoPrintReceipt) return;
+    const timer = window.setTimeout(() => {
+      window.print();
+      setAutoPrintReceipt(false);
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [saleReceipt, autoPrintReceipt]);
+
   const invalidateRelated = async () => Promise.all([
     getListOrdersQueryKey(), getListProductsQueryKey(), getListSalesQueryKey(), getGetDashboardQueryKey(),
   ].map(queryKey => qc.invalidateQueries({ queryKey })));
@@ -97,14 +109,16 @@ export function OrdersPage({ role }: { role: Role }) {
       return;
     }
     try {
-      await convert.mutateAsync({
+      const sale = await convert.mutateAsync({
         orderId: convertOrder.id,
         data: { payments: payments.filter(line => Number(line.amount) > 0).map(line => ({ method: line.method, amount: roundMoney(Number(line.amount)) })) },
       } as any);
       await invalidateRelated();
       setConvertOrder(null);
       setSelected(null);
-      toast({ title: 'Venta registrada', description: `${convertOrder.orderNumber} se convirtió en una venta normal.` });
+      setSaleReceipt(sale);
+      setAutoPrintReceipt(true);
+      toast({ title: 'Venta registrada', description: `Recibo ${sale.receiptNumber} listo para imprimir.` });
     } catch { notifyError('Verifica que el total de pagos sea igual al saldo pendiente.'); }
   };
   const printOrder = (order: any) => {
@@ -112,6 +126,18 @@ export function OrdersPage({ role }: { role: Role }) {
     window.setTimeout(() => window.print(), 100);
   };
   const emptyBody = status ? `No hay pedidos en estado “${statusLabels[status]}”.` : 'Los pedidos programados aparecerán aquí al guardarlos desde Caja rápida.';
+
+  if (saleReceipt) return <div className="mx-auto max-w-3xl" data-testid="converted-sale-receipt">
+    <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <div><p className="text-sm text-[#82908f]">Venta finalizada</p><h2 className="text-3xl font-bold">Recibo {saleReceipt.receiptNumber}</h2></div>
+      <div className="flex gap-2">
+        <Button variant="outline" onClick={() => window.print()} className="gap-2" data-testid="button-print-converted-sale"><Printer size={16}/> Imprimir recibo</Button>
+        <Button onClick={() => setSaleReceipt(null)} className="bg-[#bd4778]" data-testid="button-return-orders">Volver a pedidos</Button>
+      </div>
+    </div>
+    <Receipt sale={saleReceipt}/>
+    <div className="receipt-print"><Receipt sale={saleReceipt}/></div>
+  </div>;
 
   return <div data-testid="page-orders">
     <div className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
