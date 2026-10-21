@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { Route, Switch, Redirect, Router as WouterRouter, Link, useLocation } from 'wouter';
 import { useForm } from 'react-hook-form';
@@ -17,6 +17,7 @@ import {
   useGetFinancialReport, getGetFinancialReportQueryKey,
   type TeamUser,
   useListSettlements, getListSettlementsQueryKey, useCreateSettlement,
+  useCreateOrder, getListOrdersQueryKey,
 } from '@workspace/api-client-react';
 import {
   Activity, ArrowDownLeft, ArrowRight, ArrowUpRight, Banknote, Boxes,
@@ -31,6 +32,7 @@ import { Form } from '@/components/ui/form';
 import { LoadingBlock, ErrorBlock, EmptyState } from '@/components/states';
 import { can, homeFor, downloadCsv, todayDO, roundMoney, money, dateLabel, type Role } from '@/lib/access';
 import { Receipt, useStoreSettings } from '@/features/receipt';
+import { OrdersPage } from '@/features/orders-page';
 import { SettingsPage } from '@/features/settings-page';
 import { CashBar } from '@/features/cash-panel';
 import { ProductEditor, TaxEditor } from '@/features/editors';
@@ -48,6 +50,7 @@ type Field = { name: string; label: string; type?: string; options?: string[]; r
 const routes = [
   { path: '/dashboard', label: 'Resumen', icon: LayoutDashboard, group: 'Inicio' },
   { path: '/pos', label: 'Caja rápida', icon: ShoppingCart, group: 'Ventas' },
+  { path: '/orders', label: 'Pedidos', icon: CalendarDays, group: 'Ventas' },
   { path: '/sales', label: 'Ventas', icon: ShoppingBag, group: 'Ventas' },
   { path: '/products', label: 'Productos', icon: Package, group: 'Catálogo' },
   { path: '/inventory', label: 'Inventario', icon: Boxes, group: 'Catálogo' },
@@ -163,7 +166,10 @@ function AppShell({ me }: { me: TeamUser }) {
   };
 
   const renderRows = (rows: any[]) => rows.map((row: any, i: number) => {
-    if (activePath === '/products') return <tr key={row.id} data-testid={`row-product-${row.id}`}><td><b>{row.name}</b><small>{row.barcode || 'Sin código de barras'}</small></td><td>{row.sku || '—'}</td><td>{row.category}</td><td className="font-semibold">{money(row.price)}</td><td><span className={row.stock <= row.minStock ? 'text-[#bd4778] font-bold' : ''}>{row.stock} {row.unit}</span></td><td><div className="flex items-center gap-3"><Status text={row.active ? 'Activo' : 'Inactivo'} positive={row.active}/>{can.editProducts(role) && <button className="text-xs font-bold text-[#bd4778]" onClick={() => setEditingProduct(row)} data-testid={`button-edit-product-${row.id}`}>Editar</button>}</div></td></tr>;
+    if (activePath === '/products') {
+      const available = Math.max(0, row.stock - (row.reservedStock || 0));
+      return <tr key={row.id} data-testid={`row-product-${row.id}`}><td><b>{row.name}</b><small>{row.barcode || 'Sin código de barras'}</small></td><td>{row.sku || '—'}</td><td>{row.category}</td><td className="font-semibold">{money(row.price)}</td><td><span className={available <= row.minStock ? 'text-[#bd4778] font-bold' : ''}>{row.stock} {row.unit}<small>Reservado: {row.reservedStock || 0} · Disponible: {available}</small></span></td><td><div className="flex items-center gap-3"><Status text={row.active ? 'Activo' : 'Inactivo'} positive={row.active}/>{can.editProducts(role) && <button className="text-xs font-bold text-[#bd4778]" onClick={() => setEditingProduct(row)} data-testid={`button-edit-product-${row.id}`}>Editar</button>}</div></td></tr>;
+    }
     if (activePath === '/sales') return <tr key={row.id}><td><b>{row.receiptNumber}</b></td><td>{row.customerName || 'Venta al detalle'}</td><td>{dateLabel(row.createdAt)}</td><td>{row.items?.length || 0}</td><td className="font-semibold">{money(row.total)}</td><td><div className="flex items-center gap-2"><Status text={row.status === 'completed' ? 'Completada' : row.status === 'refunded' ? 'Devuelta' : 'Parcial'} positive={row.status === 'completed'}/>{row.status === 'completed' && can.refund(role) && <button className="text-xs font-bold text-[#bd4778]" onClick={() => { const reason = window.prompt('Motivo de la devolución'); if (reason) refundSale.mutate({ saleId: row.id, data: { reason } } as any, { onSuccess: () => invalidate(getListSalesQueryKey(), getGetDashboardQueryKey(), getListProductsQueryKey()) }); }} data-testid={`button-refund-${row.id}`}>Devolver</button>}</div></td></tr>;
     if (activePath === '/inventory') return <tr key={row.id}><td><b>{row.productName}</b></td><td>{reasonText(row.reason)}</td><td className={row.quantityChange > 0 ? 'text-[#398477] font-bold' : 'text-[#bd4778] font-bold'}>{row.quantityChange > 0 ? '+' : ''}{row.quantityChange}</td><td>{dateLabel(row.createdAt)}</td><td>{row.note || '—'}</td></tr>;
     if (activePath === '/customers' || activePath === '/suppliers') return <tr key={row.id}><td><b>{row.name}</b><small>{row.taxId || 'Sin RNC / cédula'}</small></td><td>{row.phone || '—'}</td><td>{row.email || '—'}</td><td>{money(row.balance)}</td></tr>;
@@ -190,12 +196,13 @@ function AppShell({ me }: { me: TeamUser }) {
         {!can.route(role, activePath) ? <EmptyState title="Esta sección no está disponible para tu rol" body={`Tu rol actual es ${roleName(role)}. Si necesitas acceso, pídelo al propietario.`} action={<Link href={homeFor(role)} className="font-bold text-[#bd4778]">Ir a mi pantalla de inicio</Link>}/> : <>
         {activePath === '/dashboard' && <DashboardPage dashboard={dashboard} loading={dashLoading} error={dashError} retry={retryDash} sales={salesQ.data || []}/>}
         {activePath === '/pos' && <PosPage products={products} productsLoading={productsQ.isLoading} customers={customers} taxRates={taxesQ.data || []} createSale={createSale} invalidate={invalidate} toast={toast}/>}
+        {activePath === '/orders' && <OrdersPage role={role}/>}
         {activePath === '/accounting' && <AccountingPage role={role} accounts={accounts} journals={journalQ.data || []} report={reportQ.data} reportQ={reportQ} range={range} setRange={setRange} loading={accountsQ.isLoading} accountsError={accountsQ.isError} retry={accountsQ.refetch} onAdd={openModal} createJournal={createJournal} invalidate={invalidate}/>}
         {activePath === '/settings' && <SettingsPage role={role}/>}
         {activePath === '/team' && <TeamPage me={me}/>}
         {dataForPage() && <section>
           <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-sm font-medium text-[#82908f]">{subtitle(activePath)}</p><h2 className="mt-1 text-3xl font-bold">{title}</h2></div><div className="flex gap-2"><label className="relative flex-1 sm:w-64"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#879291]" size={17}/><Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." className="h-11 border-[#e3ddd1] bg-white pl-10" data-testid="input-search"/></label>{addLabel[activePath] && allowedAdd[activePath] && <Button onClick={openModal} className="h-11 gap-2 bg-[#bd4778] hover:bg-[#a83968]" data-testid="button-create"><Plus size={17}/><span className="hidden sm:inline">{addLabel[activePath]}</span><span className="sm:hidden">Agregar</span></Button>}</div></div>
-          {activePath === '/products' && <div className="mb-5 grid gap-3 sm:grid-cols-3"><MiniStat label="Productos activos" value={String(products.filter((p: any) => p.active).length)}/><MiniStat label="Por reponer" value={String(products.filter((p: any) => p.stock <= p.minStock).length)} tone="pink"/><MiniStat label="Categorías" value={String(new Set(products.map((p: any) => p.category)).size)}/></div>}
+          {activePath === '/products' && <div className="mb-5 grid gap-3 sm:grid-cols-3"><MiniStat label="Productos activos" value={String(products.filter((p: any) => p.active).length)}/><MiniStat label="Por reponer" value={String(products.filter((p: any) => p.stock - (p.reservedStock || 0) <= p.minStock).length)} tone="pink"/><MiniStat label="Categorías" value={String(new Set(products.map((p: any) => p.category)).size)}/></div>}
           {(activePath === '/customers' || activePath === '/suppliers') && <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#d8e8e2] bg-[#f1f8f5] p-4 text-sm text-[#3d6660]"><span>Saldos calculados por el sistema. {activePath === '/customers' ? 'Registra abonos de clientes' : 'Registra pagos a proveedores'} en Contabilidad, pestaña Cobros y pagos.</span><Link href="/accounting" className="font-bold text-[#bd4778]" data-testid="link-settlements">Ir a cobros y pagos</Link></div>}
           {activePath === '/inventory' && <div className="mb-5 rounded-2xl border border-[#f0d9e2] bg-[#fff4f7] p-4 text-sm text-[#76515e]"><b>Control de existencias</b> · Registra conteos, pérdidas, daños y correcciones. Los cambios quedan en el historial.</div>}
           <DataTable data={dataForPage()!} renderRows={renderRows} />
@@ -239,11 +246,21 @@ function DashboardPage({ dashboard, loading, error, retry, sales }: any) {
 }
 
 function PosPage({ products, productsLoading, customers, taxRates, createSale, invalidate, toast }: any) {
+  const qc = useQueryClient();
   const [query, setQuery] = useState(''); const [cart, setCart] = useState<Record<string, number>>({});
   const [customerId, setCustomerId] = useState(''); const [discount, setDiscount] = useState(''); const [payment, setPayment] = useState('cash');
   const [receipt, setReceipt] = useState<any>(null);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [pickupDate, setPickupDate] = useState(todayDO());
+  const [pickupTime, setPickupTime] = useState('');
+  const [advance, setAdvance] = useState('');
+  const [advanceMethod, setAdvanceMethod] = useState('cash');
+  const [orderNote, setOrderNote] = useState('');
+  const createOrder = useCreateOrder();
   const visible = products.filter((p: any) => p.active && (!query || `${p.name} ${p.sku || ''} ${p.barcode || ''}`.toLowerCase().includes(query.toLowerCase())));
   const items = products.filter((p: any) => cart[p.id]).map((p: any) => ({ ...p, quantity: cart[p.id] }));
+  const availableStock = (product: any) => product.productType === 'service' ? null : Math.max(0, Number(product.stock || 0) - Number(product.reservedStock || 0));
+  const stockShortage = items.some((item: any) => availableStock(item) !== null && item.quantity > availableStock(item)!);
   const subtotal = roundMoney(items.reduce((sum: number, item: any) => sum + item.price * item.quantity, 0));
   const discountAmount = roundMoney(Math.min(Math.max(Number(discount) || 0, 0), subtotal));
   const lines = items.map((item: any) => {
@@ -257,12 +274,48 @@ function PosPage({ products, productsLoading, customers, taxRates, createSale, i
   const inclusiveTax = roundMoney(lines.filter((l: any) => l.inclusive).reduce((n: number, l: any) => n + l.tax, 0));
   const grandTotal = roundMoney(lines.reduce((n: number, l: any) => n + l.total, 0));
   const needsCustomer = payment === 'credit' && !customerId;
+  const advanceAmount = roundMoney(Number(advance) || 0);
+  const advanceNeedsCustomer = advanceAmount > 0 && !customerId;
+  const advanceExceedsTotal = advanceAmount > grandTotal;
   const removeItem = (id: string) => setCart(current => { const next = { ...current }; delete next[id]; return next; });
   const checkout = () => {
-    if (!items.length || grandTotal <= 0 || needsCustomer) return;
+    if (!items.length || grandTotal <= 0 || needsCustomer || stockShortage) return;
     createSale.mutate({ data: { customerId: customerId || null, items: items.map((item: any) => ({ productId: item.id, quantity: item.quantity })), discountAmount, payments: [{ method: payment, amount: grandTotal }] } } as any, {
       onSuccess: async (sale: any) => { setReceipt(sale); setCart({}); setDiscount(''); await invalidate(getListSalesQueryKey(), getGetDashboardQueryKey(), getListProductsQueryKey()); toast({ title: 'Venta completada', description: `Recibo ${sale.receiptNumber} listo para imprimir.` }); },
       onError: () => toast({ title: 'No se pudo completar la venta', description: 'Verifica el pago y las existencias.', variant: 'destructive' }),
+    });
+  };
+  const submitScheduledOrder = (event: FormEvent) => {
+    event.preventDefault();
+    const deposit = advanceAmount;
+    if (!items.length || !pickupDate || deposit < 0 || deposit > grandTotal || advanceNeedsCustomer || stockShortage) return;
+    if (deposit > 0 && !['cash', 'card', 'transfer'].includes(advanceMethod)) return;
+    createOrder.mutate({
+      data: {
+        customerId: customerId || null,
+        pickupDate,
+        pickupTime: pickupTime || null,
+        items: items.map((item: any) => ({ productId: item.id, quantity: item.quantity })),
+        discountAmount,
+        payments: deposit > 0 ? [{ method: advanceMethod, amount: deposit }] : [],
+        note: orderNote || null,
+      },
+    } as any, {
+      onSuccess: async (order: any) => {
+        await Promise.all([
+          getListOrdersQueryKey(), getListProductsQueryKey(), getListSalesQueryKey(), getGetDashboardQueryKey(),
+          getListCustomersQueryKey(),
+        ].map(queryKey => qc.invalidateQueries({ queryKey })));
+        setCart({});
+        setDiscount('');
+        setScheduleOpen(false);
+        setPickupDate(todayDO());
+        setPickupTime('');
+        setAdvance('');
+        setOrderNote('');
+        toast({ title: 'Pedido programado', description: `${order.orderNumber} · recogida ${dateLabel(order.pickupDate)}.` });
+      },
+      onError: () => toast({ title: 'No se pudo programar', description: 'Verifica las existencias, fecha y monto del avance.', variant: 'destructive' }),
     });
   };
   if (receipt) return <div className="mx-auto max-w-3xl"><div className="mb-5 flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm text-[#82908f]">Venta finalizada</p><h2 className="text-3xl font-bold">Recibo {receipt.receiptNumber}</h2></div><div className="flex gap-2"><Button variant="outline" onClick={() => window.print()} className="gap-2" data-testid="button-print"><Printer size={16}/> Imprimir</Button><Button onClick={() => setReceipt(null)} className="bg-[#bd4778]" data-testid="button-new-sale">Nueva venta</Button></div></div><Receipt sale={receipt}/><div className="receipt-print"><Receipt sale={receipt}/></div></div>;
@@ -270,15 +323,39 @@ function PosPage({ products, productsLoading, customers, taxRates, createSale, i
     <CashBar/>
     <div className="grid gap-5 xl:grid-cols-[1fr_390px]">
       <section className="min-w-0"><label className="relative mb-4 block"><Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#81908e]" size={19}/><Input autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Busca o escanea el código de barras..." className="h-14 border-[#e5dfd3] bg-white pl-12 text-base shadow-sm" data-testid="input-pos-search"/><span className="absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md bg-[#f4f0e7] px-2 py-1 text-[10px] text-[#899492] sm:block">LECTOR USB · TECLADO</span></label>
-        {productsLoading ? <LoadingBlock/> : visible.length ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{visible.slice(0, 48).map((p: any) => <button key={p.id} onClick={() => setCart(current => ({ ...current, [p.id]: (current[p.id] || 0) + 1 }))} className="group rounded-2xl border border-[#e7e1d6] bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-[#d9a6bb] hover:shadow-md" data-testid={`button-add-cart-${p.id}`}><div className="flex items-start justify-between gap-2"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#f9e9ef] text-[#bd4778]"><Package size={18}/></span><span className="text-[11px] text-[#899391]">{p.stock} disponibles</span></div><b className="mt-3 block line-clamp-2 min-h-10">{p.name}</b><div className="mt-2 flex items-center justify-between"><strong className="text-lg text-[#bd4778]">{money(p.price)}</strong><span className="grid h-7 w-7 place-items-center rounded-full bg-[#eff5f1] text-[#398477]"><Plus size={16}/></span></div></button>)}</div> : <EmptyState title={query ? 'No encontramos ese producto' : 'No hay productos disponibles'} body={query ? 'Revisa el nombre o el código de barras.' : 'Agrega productos al catálogo para iniciar la venta.'}/>}</section>
+        {productsLoading ? <LoadingBlock/> : visible.length ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{visible.slice(0, 48).map((p: any) => {
+          const available = availableStock(p);
+          const cannotAdd = available !== null && (cart[p.id] || 0) >= available;
+          return <button key={p.id} disabled={cannotAdd} onClick={() => setCart(current => ({ ...current, [p.id]: (current[p.id] || 0) + 1 }))} className={`group rounded-2xl border border-[#e7e1d6] bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-[#d9a6bb] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:translate-y-0 disabled:hover:shadow-none`} data-testid={`button-add-cart-${p.id}`}><div className="flex items-start justify-between gap-2"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#f9e9ef] text-[#bd4778]"><Package size={18}/></span><span className="text-[11px] text-[#899391]">{available === null ? 'Servicio' : `${available} disponibles`}</span></div><b className="mt-3 block line-clamp-2 min-h-10">{p.name}</b><div className="mt-2 flex items-center justify-between"><strong className="text-lg text-[#bd4778]">{money(p.price)}</strong><span className="grid h-7 w-7 place-items-center rounded-full bg-[#eff5f1] text-[#398477]"><Plus size={16}/></span></div></button>;
+        })}</div> : <EmptyState title={query ? 'No encontramos ese producto' : 'No hay productos disponibles'} body={query ? 'Revisa el nombre o el código de barras.' : 'Agrega productos al catálogo para iniciar la venta.'}/>}</section>
       <aside className="rounded-2xl border border-[#e6e0d5] bg-white p-5 shadow-sm xl:sticky xl:top-[94px] xl:self-start"><div className="flex items-center justify-between"><h3 className="text-xl font-bold">Venta actual</h3><span className="rounded-full bg-[#f4f0e7] px-2.5 py-1 text-xs font-bold">{items.reduce((n: number, x: any) => n + x.quantity, 0)} artículos</span></div>
         <label className="mt-4 grid gap-1.5 text-xs font-bold text-[#748381]">CLIENTE<select value={customerId} onChange={e => setCustomerId(e.target.value)} className="h-10 rounded-lg border border-[#e2dbcf] bg-white px-3 text-sm font-normal text-[#263d40]" data-testid="select-pos-customer"><option value="">Venta al detalle</option>{customers.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
         <div className="my-4 max-h-[34vh] min-h-[110px] space-y-3 overflow-y-auto border-y border-dashed border-[#e3ddd2] py-4">{items.length ? items.map((item: any) => <div className="flex items-center gap-2" key={item.id}><div className="min-w-0 flex-1"><b className="block truncate text-sm">{item.name}</b><small className="text-[#8a9694]">{money(item.price)} c/u</small></div><div className="flex items-center gap-1"><button onClick={() => setCart(current => ({ ...current, [item.id]: Math.max(0, Math.round((current[item.id] - 1) * 100) / 100) }))} className="grid h-7 w-7 place-items-center rounded-md bg-[#f2efe8]" aria-label={`Quitar uno de ${item.name}`} data-testid={`button-minus-${item.id}`}>−</button><input type="number" inputMode="decimal" step="0.01" min="0" value={item.quantity} onChange={e => { const q = Math.max(0, Math.round(Number(e.target.value) * 100) / 100); setCart(current => ({ ...current, [item.id]: q })); }} className="h-7 w-14 rounded-md border border-[#e2dbcf] text-center text-sm font-bold" aria-label={`Cantidad de ${item.name}`} data-testid={`input-qty-${item.id}`}/><button onClick={() => setCart(current => ({ ...current, [item.id]: current[item.id] + 1 }))} className="grid h-7 w-7 place-items-center rounded-md bg-[#f2efe8]" aria-label={`Agregar uno de ${item.name}`} data-testid={`button-plus-${item.id}`}>+</button></div><b className="w-[76px] text-right text-sm">{money(item.price * item.quantity)}</b><button onClick={() => removeItem(item.id)} className="p-1 text-[#a1aaa7] hover:text-[#bd4778]" aria-label={`Eliminar ${item.name}`} data-testid={`button-remove-${item.id}`}><X size={15}/></button></div>) : <div className="grid h-24 place-items-center text-center text-sm text-[#8a9694]">Tu venta está vacía.<br/>Agrega productos para empezar.</div>}</div>
         <div className="space-y-2 text-sm"><div className="flex justify-between text-[#788684]"><span>Subtotal</span><span>{money(subtotal)}</span></div><label className="flex items-center justify-between text-[#788684]"><span>Descuento (DOP)</span><Input type="number" min="0" value={discount} onChange={e => setDiscount(e.target.value)} className="h-8 w-28 text-right" placeholder="0.00" data-testid="input-discount"/></label><div className="flex justify-between text-[#788684]"><span>Impuestos{inclusiveTax > 0 ? ` (incl. ${money(inclusiveTax)})` : ''}</span><span data-testid="text-pos-tax">{money(taxTotal)}</span></div><div className="flex justify-between border-t border-[#e9e4da] pt-3 text-lg font-bold"><span>Total</span><span className="text-[#bd4778]" data-testid="text-pos-total">{money(grandTotal)}</span></div></div>
         <label className="mt-4 grid gap-1.5 text-xs font-bold text-[#748381]">FORMA DE PAGO<select value={payment} onChange={e => setPayment(e.target.value)} className="h-10 rounded-lg border border-[#e2dbcf] bg-white px-3 text-sm font-normal text-[#263d40]" data-testid="select-payment">{['cash', 'card', 'transfer', 'credit'].map(k => <option key={k} value={k}>{paymentName(k)}</option>)}</select></label>
-        <Button disabled={!items.length || grandTotal <= 0 || needsCustomer || createSale.isPending} onClick={checkout} className="mt-4 h-12 w-full bg-[#bd4778] text-base font-bold hover:bg-[#a83968]" data-testid="button-checkout">{createSale.isPending ? 'Procesando…' : 'Cobrar ' + money(grandTotal)}</Button>{needsCustomer && <p role="alert" className="mt-2 text-center text-xs font-semibold text-[#bd4778]" data-testid="text-credit-needs-customer">Para vender a crédito, selecciona un cliente.</p>}<p className="mt-3 text-center text-[11px] text-[#8d9896]">Total calculado con las tasas activas asignadas a cada producto; el servidor confirma el monto final.</p>
+        <Button disabled={!items.length || grandTotal <= 0 || needsCustomer || stockShortage || createSale.isPending} onClick={checkout} className="mt-4 h-12 w-full bg-[#bd4778] text-base font-bold hover:bg-[#a83968]" data-testid="button-checkout">{createSale.isPending ? 'Procesando…' : 'Cobrar ' + money(grandTotal)}</Button>{needsCustomer && <p role="alert" className="mt-2 text-center text-xs font-semibold text-[#bd4778]" data-testid="text-credit-needs-customer">Para vender a crédito, selecciona un cliente.</p>}
+        {stockShortage && <p role="alert" className="mt-2 text-center text-xs font-semibold text-[#a4474d]" data-testid="text-pos-stock-shortage">El carrito supera las unidades disponibles sin reserva. Ajusta las cantidades para continuar.</p>}
+        <Button type="button" variant="outline" disabled={!items.length || stockShortage || createOrder.isPending} onClick={() => setScheduleOpen(true)} className="mt-2 h-11 w-full border-[#d8c8ce] font-bold text-[#934b69] hover:bg-[#fcf3f6]" data-testid="button-schedule-order">{createOrder.isPending ? 'Guardando pedido…' : 'Programar pedido / prefactura'}</Button>
+        <p className="mt-3 text-center text-[11px] text-[#8d9896]">Total calculado con las tasas activas asignadas a cada producto; el servidor confirma el monto final.</p>
       </aside>
     </div>
+    {scheduleOpen && <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#153638]/45 p-0 backdrop-blur-sm sm:items-center sm:p-4" onMouseDown={event => { if (event.target === event.currentTarget && !createOrder.isPending) setScheduleOpen(false); }}>
+      <section className="max-h-[94dvh] w-full overflow-y-auto rounded-t-[24px] bg-[#fffdf8] p-5 shadow-2xl sm:max-w-xl sm:rounded-[24px] sm:p-7" role="dialog" aria-modal="true" aria-labelledby="schedule-create-title" data-testid="dialog-create-order">
+        <div className="mb-5 flex items-start justify-between"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-[#bd4778]">Festiland · Agenda</p><h3 id="schedule-create-title" className="mt-1 text-2xl font-bold">Programar recogida</h3><p className="mt-1 text-sm text-[#788684]">El servidor fija precios e impuestos y reserva las existencias al guardar.</p></div><button type="button" disabled={createOrder.isPending} onClick={() => setScheduleOpen(false)} aria-label="Cerrar" className="rounded-lg p-2 hover:bg-[#f4f0e7]" data-testid="button-close-create-order"><X size={20}/></button></div>
+        <form onSubmit={submitScheduledOrder} className="grid gap-4 sm:grid-cols-2">
+          <label className="grid gap-1.5 text-sm font-semibold">Fecha de recogida<Input required type="date" min={todayDO()} value={pickupDate} onChange={event => setPickupDate(event.target.value)} className="h-11 border-[#ded8cc] bg-white" data-testid="input-schedule-date"/></label>
+          <label className="grid gap-1.5 text-sm font-semibold">Hora opcional<Input type="time" value={pickupTime} onChange={event => setPickupTime(event.target.value)} className="h-11 border-[#ded8cc] bg-white" data-testid="input-schedule-time"/></label>
+          <label className="grid gap-1.5 text-sm font-semibold">Avance opcional (DOP)<Input type="number" min="0" max={grandTotal} step="0.01" value={advance} onChange={event => setAdvance(event.target.value)} placeholder="0.00" className="h-11 border-[#ded8cc] bg-white" data-testid="input-schedule-advance"/></label>
+          <label className="grid gap-1.5 text-sm font-semibold">Método del avance<select value={advanceMethod} onChange={event => setAdvanceMethod(event.target.value)} disabled={!(Number(advance) > 0)} className="h-11 rounded-xl border border-[#ded8cc] bg-white px-3 text-sm font-normal disabled:opacity-50" data-testid="select-schedule-advance-method">{[['cash', 'Efectivo'], ['card', 'Tarjeta'], ['transfer', 'Transferencia']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <label className="grid gap-1.5 text-sm font-semibold sm:col-span-2">Nota del pedido<textarea maxLength={1000} value={orderNote} onChange={event => setOrderNote(event.target.value)} rows={3} placeholder="Detalles para preparar la celebración" className="resize-y rounded-xl border border-[#ded8cc] bg-white px-3 py-2 text-sm font-normal outline-none focus:border-[#bd4778]" data-testid="input-schedule-note"/></label>
+          {advanceNeedsCustomer && <p role="alert" className="text-sm font-semibold text-[#a4474d] sm:col-span-2" data-testid="text-order-advance-needs-customer">Selecciona un cliente para registrar el anticipo.</p>}
+          {advanceExceedsTotal && <p role="alert" className="text-sm font-semibold text-[#a4474d] sm:col-span-2" data-testid="text-order-advance-exceeds-total">El anticipo no puede superar el total del pedido ({money(grandTotal)}).</p>}
+          {stockShortage && <p role="alert" className="text-sm font-semibold text-[#a4474d] sm:col-span-2" data-testid="text-order-stock-shortage">La disponibilidad cambió; ajusta las cantidades antes de guardar.</p>}
+          <div className="rounded-xl bg-[#f3f6f1] p-3 text-sm text-[#56716b] sm:col-span-2">La caja mantiene el carrito abierto si cierras este formulario. El monto final del pedido lo confirma el servidor.</div>
+          <div className="flex gap-3 sm:col-span-2"><Button type="button" variant="outline" disabled={createOrder.isPending} onClick={() => setScheduleOpen(false)} className="h-12 flex-1" data-testid="button-dismiss-create-order">Volver al carrito</Button><Button type="submit" disabled={createOrder.isPending || !items.length || !pickupDate || advanceNeedsCustomer || advanceExceedsTotal || stockShortage} className="h-12 flex-1 bg-[#bd4778] font-bold hover:bg-[#a83968]" data-testid="button-submit-order">{createOrder.isPending ? 'Guardando…' : 'Guardar pedido'}</Button></div>
+        </form>
+      </section>
+    </div>}
   </div>;
 }
 

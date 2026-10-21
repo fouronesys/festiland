@@ -18,6 +18,7 @@ export interface Product {
   price: number;
   cost: number;
   stock: number;
+  reservedStock: number;
   minStock: number;
   unit: string;
   productType: ProductProductType;

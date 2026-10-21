@@ -12,6 +12,7 @@ tags:
   - name: store
   - name: products
   - name: sales
+  - name: orders
   - name: inventory
   - name: contacts
   - name: accounting
@@ -162,6 +163,120 @@ paths:
       responses:
         "200":
           description: Refunded sale
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sale" }
+  /orders:
+    get:
+      operationId: listOrders
+      tags: [orders]
+      summary: List scheduled and completed orders
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: status
+          schema: { type: string, enum: [pending, ready, converted, cancelled] }
+      responses:
+        "200":
+          description: Order agenda
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Order" }
+    post:
+      operationId: createOrder
+      tags: [orders]
+      summary: Schedule a pre-invoice and reserve its products
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrderInput" }
+      responses:
+        "201":
+          description: Scheduled order
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+  /orders/{orderId}:
+    patch:
+      operationId: updateOrderSchedule
+      tags: [orders]
+      summary: Reschedule an open order or update its note
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrderUpdate" }
+      responses:
+        "200":
+          description: Updated order
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+  /orders/{orderId}/ready:
+    post:
+      operationId: markOrderReady
+      tags: [orders]
+      summary: Mark an order as prepared for pickup
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Ready order
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+  /orders/{orderId}/cancel:
+    post:
+      operationId: cancelOrder
+      tags: [orders]
+      summary: Cancel an order, release stock, and refund its deposits
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrderCancelInput" }
+      responses:
+        "200":
+          description: Cancelled order
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+  /orders/{orderId}/convert:
+    post:
+      operationId: convertOrder
+      tags: [orders]
+      summary: Convert a pre-invoice into a sale
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrderConversionInput" }
+      responses:
+        "201":
+          description: Sale created from the order
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Sale" }
@@ -869,12 +984,13 @@ components:
         price: { type: number }
         cost: { type: number }
         stock: { type: number }
+        reservedStock: { type: number }
         minStock: { type: number }
         unit: { type: string }
         productType: { type: string, enum: [product, service] }
         taxRateId: { type: ["string", "null"], format: uuid }
         active: { type: boolean }
-      required: [id, name, category, price, cost, stock, minStock, unit, productType, active]
+      required: [id, name, category, price, cost, stock, reservedStock, minStock, unit, productType, active]
     ProductInput:
       type: object
       properties:
@@ -931,6 +1047,91 @@ components:
           items: { $ref: "#/components/schemas/PaymentInput" }
         note: { type: ["string", "null"] }
       required: [items, discountAmount, payments]
+    OrderDepositInput:
+      type: object
+      properties:
+        method: { type: string, enum: [cash, card, transfer] }
+        amount: { type: number, exclusiveMinimum: 0 }
+      required: [method, amount]
+    OrderInput:
+      type: object
+      properties:
+        customerId: { type: ["string", "null"], format: uuid }
+        pickupDate: { type: string, format: date }
+        pickupTime: { type: ["string", "null"], pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }
+        items:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/SaleLineInput" }
+        discountAmount: { type: number, minimum: 0 }
+        payments:
+          type: array
+          items: { $ref: "#/components/schemas/OrderDepositInput" }
+        note: { type: ["string", "null"], maxLength: 1000 }
+      required: [pickupDate, items, discountAmount, payments]
+    OrderUpdate:
+      type: object
+      properties:
+        pickupDate: { type: string, format: date }
+        pickupTime: { type: ["string", "null"], pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }
+        note: { type: ["string", "null"], maxLength: 1000 }
+    OrderConversionInput:
+      type: object
+      properties:
+        payments:
+          type: array
+          items: { $ref: "#/components/schemas/PaymentInput" }
+      required: [payments]
+    OrderCancelInput:
+      type: object
+      properties:
+        confirmDepositRefund: { type: boolean }
+      required: [confirmDepositRefund]
+    OrderLine:
+      type: object
+      properties:
+        productId: { type: string }
+        name: { type: string }
+        productType: { type: string, enum: [product, service] }
+        quantity: { type: number }
+        unitPrice: { type: number }
+        lineTotal: { type: number }
+        taxAmount: { type: number }
+      required: [productId, name, productType, quantity, unitPrice, lineTotal, taxAmount]
+    OrderDeposit:
+      type: object
+      properties:
+        method: { type: string, enum: [cash, card, transfer] }
+        amount: { type: number }
+        createdAt: { type: string, format: date-time }
+      required: [method, amount, createdAt]
+    Order:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        orderNumber: { type: string }
+        customerId: { type: ["string", "null"], format: uuid }
+        customerName: { type: ["string", "null"] }
+        pickupDate: { type: string, format: date }
+        pickupTime: { type: ["string", "null"] }
+        status: { type: string, enum: [pending, ready, converted, cancelled] }
+        subtotal: { type: number }
+        discountAmount: { type: number }
+        taxAmount: { type: number }
+        total: { type: number }
+        depositAmount: { type: number }
+        balanceDue: { type: number }
+        depositRefunded: { type: boolean }
+        saleId: { type: ["string", "null"], format: uuid }
+        note: { type: ["string", "null"] }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/OrderLine" }
+        depositPayments:
+          type: array
+          items: { $ref: "#/components/schemas/OrderDeposit" }
+        createdAt: { type: string, format: date-time }
+      required: [id, orderNumber, status, pickupDate, subtotal, discountAmount, taxAmount, total, depositAmount, balanceDue, depositRefunded, items, depositPayments, createdAt]
     SaleLine:
       type: object
       properties:

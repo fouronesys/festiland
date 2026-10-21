@@ -12,6 +12,7 @@ const BASE_ACCOUNTS = [
   { code: "1200", name: "Inventario", type: "asset", systemKey: "inventory" },
   { code: "2000", name: "Cuentas por pagar", type: "liability", systemKey: "payable" },
   { code: "2100", name: "Impuestos por pagar", type: "liability", systemKey: "tax" },
+  { code: "2200", name: "Anticipos de clientes", type: "liability", systemKey: "customerAdvances" },
   { code: "3000", name: "Capital inicial", type: "equity", systemKey: "equity" },
   { code: "4000", name: "Ventas", type: "revenue", systemKey: "revenue" },
   { code: "5000", name: "Costo de ventas", type: "expense", systemKey: "cogs" },

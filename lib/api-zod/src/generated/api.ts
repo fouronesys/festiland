@@ -87,6 +87,7 @@ export const ListProductsResponseItem = zod.object({
   "price": zod.number(),
   "cost": zod.number(),
   "stock": zod.number(),
+  "reservedStock": zod.number(),
   "minStock": zod.number(),
   "unit": zod.string(),
   "productType": zod.enum(['product', 'service']),
@@ -133,6 +134,7 @@ export const CreateProductResponse = zod.object({
   "price": zod.number(),
   "cost": zod.number(),
   "stock": zod.number(),
+  "reservedStock": zod.number(),
   "minStock": zod.number(),
   "unit": zod.string(),
   "productType": zod.enum(['product', 'service']),
@@ -180,6 +182,7 @@ export const UpdateProductResponse = zod.object({
   "price": zod.number(),
   "cost": zod.number(),
   "stock": zod.number(),
+  "reservedStock": zod.number(),
   "minStock": zod.number(),
   "unit": zod.string(),
   "productType": zod.enum(['product', 'service']),
@@ -282,6 +285,297 @@ export const RefundSaleBody = zod.object({
 })
 
 export const RefundSaleResponse = zod.object({
+  "id": zod.string().uuid(),
+  "receiptNumber": zod.string(),
+  "customerName": zod.string().nullish(),
+  "status": zod.enum(['completed', 'refunded', 'partial']),
+  "subtotal": zod.number(),
+  "discountAmount": zod.number(),
+  "taxAmount": zod.number(),
+  "total": zod.number(),
+  "paymentSummary": zod.string(),
+  "items": zod.array(zod.object({
+  "productId": zod.string(),
+  "name": zod.string(),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "lineTotal": zod.number(),
+  "taxAmount": zod.number()
+})),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary List scheduled and completed orders
+ */
+export const ListOrdersQueryParams = zod.object({
+  "search": zod.coerce.string().optional(),
+  "status": zod.enum(['pending', 'ready', 'converted', 'cancelled']).optional()
+})
+
+export const ListOrdersResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "orderNumber": zod.string(),
+  "customerId": zod.string().uuid().nullish(),
+  "customerName": zod.string().nullish(),
+  "pickupDate": zod.coerce.date(),
+  "pickupTime": zod.string().nullish(),
+  "status": zod.enum(['pending', 'ready', 'converted', 'cancelled']),
+  "subtotal": zod.number(),
+  "discountAmount": zod.number(),
+  "taxAmount": zod.number(),
+  "total": zod.number(),
+  "depositAmount": zod.number(),
+  "balanceDue": zod.number(),
+  "depositRefunded": zod.boolean(),
+  "saleId": zod.string().uuid().nullish(),
+  "note": zod.string().nullish(),
+  "items": zod.array(zod.object({
+  "productId": zod.string(),
+  "name": zod.string(),
+  "productType": zod.enum(['product', 'service']),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "lineTotal": zod.number(),
+  "taxAmount": zod.number()
+})),
+  "depositPayments": zod.array(zod.object({
+  "method": zod.enum(['cash', 'card', 'transfer']),
+  "amount": zod.number(),
+  "createdAt": zod.coerce.date()
+})),
+  "createdAt": zod.coerce.date()
+})
+export const ListOrdersResponse = zod.array(ListOrdersResponseItem)
+
+
+/**
+ * @summary Schedule a pre-invoice and reserve its products
+ */
+export const createOrderBodyPickupTimeRegExp = new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+export const createOrderBodyItemsItemQuantityExclusiveMin = 0;
+
+
+export const createOrderBodyDiscountAmountMin = 0;
+
+export const createOrderBodyPaymentsItemAmountExclusiveMin = 0;
+
+export const createOrderBodyNoteMax = 1000;
+
+
+
+export const CreateOrderBody = zod.object({
+  "customerId": zod.string().uuid().nullish(),
+  "pickupDate": zod.coerce.date(),
+  "pickupTime": zod.string().regex(createOrderBodyPickupTimeRegExp).nullish(),
+  "items": zod.array(zod.object({
+  "productId": zod.string().uuid(),
+  "quantity": zod.number().gt(createOrderBodyItemsItemQuantityExclusiveMin)
+})).min(1),
+  "discountAmount": zod.number().min(createOrderBodyDiscountAmountMin),
+  "payments": zod.array(zod.object({
+  "method": zod.enum(['cash', 'card', 'transfer']),
+  "amount": zod.number().gt(createOrderBodyPaymentsItemAmountExclusiveMin)
+})),
+  "note": zod.string().max(createOrderBodyNoteMax).nullish()
+})
+
+export const CreateOrderResponse = zod.object({
+  "id": zod.string().uuid(),
+  "orderNumber": zod.string(),
+  "customerId": zod.string().uuid().nullish(),
+  "customerName": zod.string().nullish(),
+  "pickupDate": zod.coerce.date(),
+  "pickupTime": zod.string().nullish(),
+  "status": zod.enum(['pending', 'ready', 'converted', 'cancelled']),
+  "subtotal": zod.number(),
+  "discountAmount": zod.number(),
+  "taxAmount": zod.number(),
+  "total": zod.number(),
+  "depositAmount": zod.number(),
+  "balanceDue": zod.number(),
+  "depositRefunded": zod.boolean(),
+  "saleId": zod.string().uuid().nullish(),
+  "note": zod.string().nullish(),
+  "items": zod.array(zod.object({
+  "productId": zod.string(),
+  "name": zod.string(),
+  "productType": zod.enum(['product', 'service']),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "lineTotal": zod.number(),
+  "taxAmount": zod.number()
+})),
+  "depositPayments": zod.array(zod.object({
+  "method": zod.enum(['cash', 'card', 'transfer']),
+  "amount": zod.number(),
+  "createdAt": zod.coerce.date()
+})),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Reschedule an open order or update its note
+ */
+export const UpdateOrderScheduleParams = zod.object({
+  "orderId": zod.coerce.string().uuid()
+})
+
+export const updateOrderScheduleBodyPickupTimeRegExp = new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+export const updateOrderScheduleBodyNoteMax = 1000;
+
+
+
+export const UpdateOrderScheduleBody = zod.object({
+  "pickupDate": zod.coerce.date().optional(),
+  "pickupTime": zod.string().regex(updateOrderScheduleBodyPickupTimeRegExp).nullish(),
+  "note": zod.string().max(updateOrderScheduleBodyNoteMax).nullish()
+})
+
+export const UpdateOrderScheduleResponse = zod.object({
+  "id": zod.string().uuid(),
+  "orderNumber": zod.string(),
+  "customerId": zod.string().uuid().nullish(),
+  "customerName": zod.string().nullish(),
+  "pickupDate": zod.coerce.date(),
+  "pickupTime": zod.string().nullish(),
+  "status": zod.enum(['pending', 'ready', 'converted', 'cancelled']),
+  "subtotal": zod.number(),
+  "discountAmount": zod.number(),
+  "taxAmount": zod.number(),
+  "total": zod.number(),
+  "depositAmount": zod.number(),
+  "balanceDue": zod.number(),
+  "depositRefunded": zod.boolean(),
+  "saleId": zod.string().uuid().nullish(),
+  "note": zod.string().nullish(),
+  "items": zod.array(zod.object({
+  "productId": zod.string(),
+  "name": zod.string(),
+  "productType": zod.enum(['product', 'service']),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "lineTotal": zod.number(),
+  "taxAmount": zod.number()
+})),
+  "depositPayments": zod.array(zod.object({
+  "method": zod.enum(['cash', 'card', 'transfer']),
+  "amount": zod.number(),
+  "createdAt": zod.coerce.date()
+})),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Mark an order as prepared for pickup
+ */
+export const MarkOrderReadyParams = zod.object({
+  "orderId": zod.coerce.string().uuid()
+})
+
+export const MarkOrderReadyResponse = zod.object({
+  "id": zod.string().uuid(),
+  "orderNumber": zod.string(),
+  "customerId": zod.string().uuid().nullish(),
+  "customerName": zod.string().nullish(),
+  "pickupDate": zod.coerce.date(),
+  "pickupTime": zod.string().nullish(),
+  "status": zod.enum(['pending', 'ready', 'converted', 'cancelled']),
+  "subtotal": zod.number(),
+  "discountAmount": zod.number(),
+  "taxAmount": zod.number(),
+  "total": zod.number(),
+  "depositAmount": zod.number(),
+  "balanceDue": zod.number(),
+  "depositRefunded": zod.boolean(),
+  "saleId": zod.string().uuid().nullish(),
+  "note": zod.string().nullish(),
+  "items": zod.array(zod.object({
+  "productId": zod.string(),
+  "name": zod.string(),
+  "productType": zod.enum(['product', 'service']),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "lineTotal": zod.number(),
+  "taxAmount": zod.number()
+})),
+  "depositPayments": zod.array(zod.object({
+  "method": zod.enum(['cash', 'card', 'transfer']),
+  "amount": zod.number(),
+  "createdAt": zod.coerce.date()
+})),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Cancel an order, release stock, and refund its deposits
+ */
+export const CancelOrderParams = zod.object({
+  "orderId": zod.coerce.string().uuid()
+})
+
+export const CancelOrderBody = zod.object({
+  "confirmDepositRefund": zod.boolean()
+})
+
+export const CancelOrderResponse = zod.object({
+  "id": zod.string().uuid(),
+  "orderNumber": zod.string(),
+  "customerId": zod.string().uuid().nullish(),
+  "customerName": zod.string().nullish(),
+  "pickupDate": zod.coerce.date(),
+  "pickupTime": zod.string().nullish(),
+  "status": zod.enum(['pending', 'ready', 'converted', 'cancelled']),
+  "subtotal": zod.number(),
+  "discountAmount": zod.number(),
+  "taxAmount": zod.number(),
+  "total": zod.number(),
+  "depositAmount": zod.number(),
+  "balanceDue": zod.number(),
+  "depositRefunded": zod.boolean(),
+  "saleId": zod.string().uuid().nullish(),
+  "note": zod.string().nullish(),
+  "items": zod.array(zod.object({
+  "productId": zod.string(),
+  "name": zod.string(),
+  "productType": zod.enum(['product', 'service']),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "lineTotal": zod.number(),
+  "taxAmount": zod.number()
+})),
+  "depositPayments": zod.array(zod.object({
+  "method": zod.enum(['cash', 'card', 'transfer']),
+  "amount": zod.number(),
+  "createdAt": zod.coerce.date()
+})),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Convert a pre-invoice into a sale
+ */
+export const ConvertOrderParams = zod.object({
+  "orderId": zod.coerce.string().uuid()
+})
+
+export const convertOrderBodyPaymentsItemAmountExclusiveMin = 0;
+
+
+
+export const ConvertOrderBody = zod.object({
+  "payments": zod.array(zod.object({
+  "method": zod.enum(['cash', 'card', 'transfer', 'credit']),
+  "amount": zod.number().gt(convertOrderBodyPaymentsItemAmountExclusiveMin)
+}))
+})
+
+export const ConvertOrderResponse = zod.object({
   "id": zod.string().uuid(),
   "receiptNumber": zod.string(),
   "customerName": zod.string().nullish(),

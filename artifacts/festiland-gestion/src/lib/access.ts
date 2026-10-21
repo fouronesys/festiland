@@ -7,6 +7,7 @@ const finance: Role[] = ['owner', 'manager', 'accountant'];
 export const routeRoles: Record<string, Role[]> = {
   '/dashboard': finance,
   '/pos': ['owner', 'manager', 'cashier'],
+  '/orders': ['owner', 'manager', 'cashier', 'accountant'],
   '/sales': all,
   '/products': all,
   '/inventory': ['owner', 'manager', 'inventory', 'accountant'],

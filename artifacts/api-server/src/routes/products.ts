@@ -52,7 +52,7 @@ router.get("/products", async (req, res): Promise<void> => {
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(productsTable.name);
   if (query.data.lowStock) {
-    products = products.filter((product) => product.stock <= product.minStock);
+    products = products.filter((product) => product.stock - product.reservedStock <= product.minStock);
   }
   res.json(ListProductsResponse.parse(products));
 });

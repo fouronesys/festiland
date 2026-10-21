@@ -46,7 +46,7 @@ router.get("/dashboard", requireRole("owner", "manager", "accountant"), async (_
       .where(
         and(
           eq(productsTable.active, true),
-          sql`${productsTable.stock} <= ${productsTable.minStock}`,
+          sql`${productsTable.stock} - ${productsTable.reservedStock} <= ${productsTable.minStock}`,
         ),
       ),
     ensureSystemAccounts(db),

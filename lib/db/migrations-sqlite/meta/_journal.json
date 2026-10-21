@@ -15,6 +15,13 @@
       "when": 1792588348676,
       "tag": "0001_accounting_period_auto_lock",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1792595791226,
+      "tag": "0002_scheduled_orders_reservations",
+      "breakpoints": true
     }
   ]
 }

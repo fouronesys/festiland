@@ -40,7 +40,8 @@ export const productsTable = sqliteTable("festiland_products", {
   id: id(), name: text("name").notNull(), sku: text("sku"), barcode: text("barcode"),
   category: text("category").notNull().default("General"),
   price: money("price").notNull().default(0), cost: real("cost").notNull().default(0),
-  stock: quantity("stock").notNull().default(0), minStock: quantity("min_stock").notNull().default(0),
+  stock: quantity("stock").notNull().default(0), reservedStock: quantity("reserved_stock").notNull().default(0),
+  minStock: quantity("min_stock").notNull().default(0),
   unit: text("unit").notNull().default("unidad"), productType: text("product_type").notNull().default("product"),
   taxRateId: text("tax_rate_id"), active: bool("active").notNull().default(true),
   createdAt: created(), updatedAt: time("updated_at").notNull().$defaultFn(() => new Date()),
@@ -68,6 +69,32 @@ export const saleLinesTable = sqliteTable("festiland_sale_lines", {
 export const salePaymentsTable = sqliteTable("festiland_sale_payments", {
   id: id(), saleId: text("sale_id").notNull(), method: text("method").notNull(), amount: money("amount").notNull(), createdAt: created(),
 });
+export const ordersTable = sqliteTable("festiland_orders", {
+  id: id(), orderNumber: text("order_number").notNull(), customerId: text("customer_id"), customerName: text("customer_name"),
+  pickupDate: text("pickup_date").notNull(), pickupTime: text("pickup_time"),
+  status: text("status").notNull().default("pending"),
+  subtotal: money("subtotal").notNull(), discountAmount: money("discount_amount").notNull().default(0),
+  taxAmount: money("tax_amount").notNull().default(0), total: money("total").notNull(),
+  depositAmount: money("deposit_amount").notNull().default(0), depositRefunded: bool("deposit_refunded").notNull().default(false),
+  saleId: text("sale_id"), note: text("note"), createdBy: text("created_by").notNull(),
+  createdAt: created(), updatedAt: time("updated_at").notNull().$defaultFn(() => new Date()),
+}, table => [
+  uniqueIndex("festiland_orders_number_unique").on(table.orderNumber),
+  index("festiland_orders_pickup_idx").on(table.pickupDate, table.status),
+  index("festiland_orders_customer_idx").on(table.customerId, table.createdAt),
+]);
+export const orderLinesTable = sqliteTable("festiland_order_lines", {
+  id: id(), orderId: text("order_id").notNull(), lineNumber: integer("line_number").notNull(),
+  productId: text("product_id").notNull(),
+  name: text("name").notNull(), productType: text("product_type").notNull(),
+  quantity: quantity("quantity").notNull(), unitPrice: money("unit_price").notNull(),
+  unitCost: real("unit_cost").notNull(), lineTotal: money("line_total").notNull(),
+  taxAmount: money("tax_amount").notNull().default(0),
+}, table => [index("festiland_order_lines_order_idx").on(table.orderId, table.lineNumber)]);
+export const orderPaymentsTable = sqliteTable("festiland_order_payments", {
+  id: id(), orderId: text("order_id").notNull(), method: text("method").notNull(),
+  amount: money("amount").notNull(), createdBy: text("created_by").notNull(), createdAt: created(),
+}, table => [index("festiland_order_payments_order_idx").on(table.orderId, table.createdAt)]);
 export const inventoryAdjustmentsTable = sqliteTable("festiland_inventory_adjustments", {
   id: id(), productId: text("product_id").notNull(), quantityChange: quantity("quantity_change").notNull(),
   reason: text("reason").notNull(), note: text("note"), createdBy: text("created_by").notNull(), createdAt: created(),

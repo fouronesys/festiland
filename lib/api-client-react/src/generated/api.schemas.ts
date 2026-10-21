@@ -214,6 +214,7 @@ export interface Product {
   price: number;
   cost: number;
   stock: number;
+  reservedStock: number;
   minStock: number;
   unit: string;
   productType: ProductProductType;
@@ -314,6 +315,134 @@ export interface SaleInput {
   payments: PaymentInput[];
   /** @nullable */
   note?: string | null;
+}
+
+export type OrderDepositInputMethod = typeof OrderDepositInputMethod[keyof typeof OrderDepositInputMethod];
+
+
+export const OrderDepositInputMethod = {
+  cash: 'cash',
+  card: 'card',
+  transfer: 'transfer',
+} as const;
+
+export interface OrderDepositInput {
+  method: OrderDepositInputMethod;
+  /** @exclusiveMinimum 0 */
+  amount: number;
+}
+
+export interface OrderInput {
+  /** @nullable */
+  customerId?: string | null;
+  pickupDate: string;
+  /**
+     * @nullable
+     * @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$
+     */
+  pickupTime?: string | null;
+  /** @minItems 1 */
+  items: SaleLineInput[];
+  /** @minimum 0 */
+  discountAmount: number;
+  payments: OrderDepositInput[];
+  /**
+     * @maxLength 1000
+     * @nullable
+     */
+  note?: string | null;
+}
+
+export interface OrderUpdate {
+  pickupDate?: string;
+  /**
+     * @nullable
+     * @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$
+     */
+  pickupTime?: string | null;
+  /**
+     * @maxLength 1000
+     * @nullable
+     */
+  note?: string | null;
+}
+
+export interface OrderConversionInput {
+  payments: PaymentInput[];
+}
+
+export interface OrderCancelInput {
+  confirmDepositRefund: boolean;
+}
+
+export type OrderLineProductType = typeof OrderLineProductType[keyof typeof OrderLineProductType];
+
+
+export const OrderLineProductType = {
+  product: 'product',
+  service: 'service',
+} as const;
+
+export interface OrderLine {
+  productId: string;
+  name: string;
+  productType: OrderLineProductType;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+  taxAmount: number;
+}
+
+export type OrderDepositMethod = typeof OrderDepositMethod[keyof typeof OrderDepositMethod];
+
+
+export const OrderDepositMethod = {
+  cash: 'cash',
+  card: 'card',
+  transfer: 'transfer',
+} as const;
+
+export interface OrderDeposit {
+  method: OrderDepositMethod;
+  amount: number;
+  createdAt: string;
+}
+
+export type OrderStatus = typeof OrderStatus[keyof typeof OrderStatus];
+
+
+export const OrderStatus = {
+  pending: 'pending',
+  ready: 'ready',
+  converted: 'converted',
+  cancelled: 'cancelled',
+} as const;
+
+export interface Order {
+  id: string;
+  orderNumber: string;
+  /** @nullable */
+  customerId?: string | null;
+  /** @nullable */
+  customerName?: string | null;
+  pickupDate: string;
+  /** @nullable */
+  pickupTime?: string | null;
+  status: OrderStatus;
+  subtotal: number;
+  discountAmount: number;
+  taxAmount: number;
+  total: number;
+  depositAmount: number;
+  balanceDue: number;
+  depositRefunded: boolean;
+  /** @nullable */
+  saleId?: string | null;
+  /** @nullable */
+  note?: string | null;
+  items: OrderLine[];
+  depositPayments: OrderDeposit[];
+  createdAt: string;
 }
 
 export interface RefundInput {
@@ -773,6 +902,21 @@ lowStock?: boolean;
 export type ListSalesParams = {
 search?: string;
 };
+
+export type ListOrdersParams = {
+search?: string;
+status?: ListOrdersStatus;
+};
+
+export type ListOrdersStatus = typeof ListOrdersStatus[keyof typeof ListOrdersStatus];
+
+
+export const ListOrdersStatus = {
+  pending: 'pending',
+  ready: 'ready',
+  converted: 'converted',
+  cancelled: 'cancelled',
+} as const;
 
 export type ListCustomersParams = {
 search?: string;

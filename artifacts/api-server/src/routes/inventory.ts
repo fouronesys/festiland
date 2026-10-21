@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import {
   CreateInventoryAdjustmentBody,
@@ -71,8 +71,8 @@ router.post(
         .where(eq(productsTable.id, parsed.data.productId))
         .limit(1);
       if (!product) return { error: "No encontramos ese producto." as const };
-      if (product.stock + parsed.data.quantityChange < 0) {
-        return { error: "El ajuste dejaría la existencia por debajo de cero." as const };
+      if (product.stock + parsed.data.quantityChange < product.reservedStock) {
+        return { error: `El ajuste dejaría menos unidades físicas que las reservadas (${product.reservedStock}).` as const };
       }
       const [updatedProduct] = await tx
         .update(productsTable)
@@ -80,8 +80,14 @@ router.post(
           stock: product.stock + parsed.data.quantityChange,
           updatedAt: new Date(),
         })
-        .where(eq(productsTable.id, product.id))
+        .where(and(
+          eq(productsTable.id, product.id),
+          sql`${productsTable.stock} + ${parsed.data.quantityChange} >= ${productsTable.reservedStock}`,
+        ))
         .returning();
+      if (!updatedProduct) {
+        return { error: "La disponibilidad cambió y el ajuste habría afectado unidades reservadas." as const };
+      }
       const [adjustment] = await tx
         .insert(inventoryAdjustmentsTable)
         .values({ ...parsed.data, createdBy: member.id })

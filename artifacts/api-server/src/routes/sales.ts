@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, like as ilike, or } from "drizzle-orm";
+import { and, desc, eq, like as ilike, or, sql } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import {
   CreateSaleBody,
@@ -26,6 +26,7 @@ import {
 import { getMember, requireRole } from "../middlewares/festilandAuth";
 import { ensureSystemAccounts, postJournalEntry, systemAccountId } from "../lib/accounting";
 import { calculateSaleLine } from "../lib/saleMath";
+import { AppError } from "../lib/appError";
 
 const router: IRouter = Router();
 const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -117,10 +118,10 @@ router.post(
         if (!product.active) return { error: `${product.name} está desactivado.` as const };
         if (
           product.productType !== "service" &&
-          item.quantity > product.stock
+          item.quantity > product.stock - product.reservedStock
         ) {
           return {
-            error: `Existencia insuficiente para ${product.name}. Disponible: ${product.stock}.` as const,
+            error: `Existencia insuficiente para ${product.name}. Disponible sin reservar: ${Math.max(0, product.stock - product.reservedStock)}.` as const,
           };
         }
       }
@@ -228,13 +229,18 @@ router.post(
           taxAmount: line.taxAmount,
         });
         if (line.product.productType !== "service") {
-          await tx
+          const [updatedProduct] = await tx
             .update(productsTable)
             .set({
               stock: line.product.stock - line.item.quantity,
               updatedAt: new Date(),
             })
-            .where(eq(productsTable.id, line.product.id));
+            .where(and(
+              eq(productsTable.id, line.product.id),
+              sql`${productsTable.stock} - ${productsTable.reservedStock} >= ${line.item.quantity}`,
+            ))
+            .returning({ id: productsTable.id });
+          if (!updatedProduct) throw new AppError(409, `La disponibilidad de ${line.product.name} cambió. Vuelve a revisar el carrito.`);
           await tx.insert(inventoryAdjustmentsTable).values({
             productId: line.product.id, quantityChange: -line.item.quantity,
             reason: "sale", note: `Venta ${receiptNumber}`, createdBy: member.id,
