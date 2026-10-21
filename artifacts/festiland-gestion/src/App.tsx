@@ -47,6 +47,8 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 
 const queryClient = new QueryClient();
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+const TRANSACTION_SYNC_INTERVAL_MS = 5_000;
+const SUMMARY_SYNC_INTERVAL_MS = 15_000;
 type Field = { name: string; label: string; type?: string; options?: string[]; required?: boolean; placeholder?: string };
 const routes = [
   { path: '/dashboard', label: 'Resumen', icon: LayoutDashboard, group: 'Inicio' },
@@ -82,23 +84,65 @@ function AppShell({ me }: { me: TeamUser }) {
   const qc = useQueryClient();
   const { logout, loggingOut } = useAuth();
   const role: Role = me.role;
+  const activePath = location === '/' ? homeFor(role) : location;
   const fin = can.finance(role);
   const [editingProduct, setEditingProduct] = useState<any>(undefined);
   const [editingTax, setEditingTax] = useState<any>(undefined);
-  const { data: dashboard, isLoading: dashLoading, isError: dashError, refetch: retryDash } = useGetDashboard({ query: { queryKey: getGetDashboardQueryKey(), enabled: can.route(role, '/dashboard') } });
+  const { data: dashboard, isLoading: dashLoading, isError: dashError, refetch: retryDash } = useGetDashboard({ query: {
+    queryKey: getGetDashboardQueryKey(),
+    enabled: can.route(role, '/dashboard') && activePath === '/dashboard',
+    refetchInterval: activePath === '/dashboard' ? SUMMARY_SYNC_INTERVAL_MS : false,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+  } });
   const searchParams = useMemo(() => ({ search: search || undefined }), [search]);
-  const productsQ = useListProducts(searchParams, { query: { queryKey: getListProductsQueryKey(searchParams) } });
-  const salesQ = useListSales(searchParams, { query: { queryKey: getListSalesQueryKey(searchParams) } });
+  const productsQ = useListProducts(searchParams, { query: {
+    queryKey: getListProductsQueryKey(searchParams),
+    refetchInterval: ['/pos', '/products', '/purchases', '/inventory'].includes(activePath) ? TRANSACTION_SYNC_INTERVAL_MS : false,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+  } });
+  const salesQ = useListSales(searchParams, { query: {
+    queryKey: getListSalesQueryKey(searchParams),
+    enabled: can.route(role, '/sales') && ['/sales', '/dashboard'].includes(activePath),
+    refetchInterval: activePath === '/sales' ? TRANSACTION_SYNC_INTERVAL_MS : false,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+  } });
   const adjustmentsQ = useListInventoryAdjustments({ query: { queryKey: getListInventoryAdjustmentsQueryKey(), enabled: can.route(role, '/inventory') } });
   const customersQ = useListCustomers(searchParams, { query: { queryKey: getListCustomersQueryKey(searchParams) } });
   const suppliersQ = useListSuppliers(searchParams, { query: { queryKey: getListSuppliersQueryKey(searchParams), enabled: can.route(role, '/suppliers') } });
   const taxesQ = useListTaxRates({ query: { queryKey: getListTaxRatesQueryKey() } });
   const expensesQ = useListExpenses({ query: { queryKey: getListExpensesQueryKey(), enabled: fin } });
-  const accountsQ = useListAccounts({ query: { queryKey: getListAccountsQueryKey(), enabled: fin } });
-  const journalQ = useListJournalEntries({ query: { queryKey: getListJournalEntriesQueryKey(), enabled: fin } });
-  const purchasesQ = useListPurchases({ query: { queryKey: getListPurchasesQueryKey(), enabled: can.purchases(role) } });
+  const accountsQ = useListAccounts({ query: {
+    queryKey: getListAccountsQueryKey(),
+    enabled: fin,
+    refetchInterval: activePath === '/accounting' ? SUMMARY_SYNC_INTERVAL_MS : false,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+  } });
+  const journalQ = useListJournalEntries({ query: {
+    queryKey: getListJournalEntriesQueryKey(),
+    enabled: fin,
+    refetchInterval: activePath === '/accounting' ? SUMMARY_SYNC_INTERVAL_MS : false,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+  } });
+  const purchasesQ = useListPurchases({ query: {
+    queryKey: getListPurchasesQueryKey(),
+    enabled: can.purchases(role) && activePath === '/purchases',
+    refetchInterval: can.purchases(role) && activePath === '/purchases' ? TRANSACTION_SYNC_INTERVAL_MS : false,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+  } });
   const [range, setRange] = useState(() => ({ from: todayDO().slice(0, 8) + '01', to: todayDO() }));
-  const reportQ = useGetFinancialReport(range, { query: { queryKey: getGetFinancialReportQueryKey(range), enabled: fin && !!range.from && !!range.to && range.from <= range.to } });
+  const reportQ = useGetFinancialReport(range, { query: {
+    queryKey: getGetFinancialReportQueryKey(range),
+    enabled: fin && !!range.from && !!range.to && range.from <= range.to,
+    refetchInterval: fin && activePath === '/accounting' ? SUMMARY_SYNC_INTERVAL_MS : false,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+  } });
   
   const createSale = useCreateSale(); const refundSale = useRefundSale();
   const createAdjustment = useCreateInventoryAdjustment(); const createCustomer = useCreateCustomer();
@@ -107,7 +151,6 @@ function AppShell({ me }: { me: TeamUser }) {
   const createJournal = useCreateJournalEntry(); const createPurchase = useCreatePurchase();
  
   const invalidate = async (...keys: (readonly unknown[])[]) => Promise.all(keys.map(queryKey => qc.invalidateQueries({ queryKey })));
-  const activePath = location === '/' ? homeFor(role) : location;
   const title = routes.find(item => item.path === activePath)?.label || 'Festiland';
   const form = useForm<Record<string, any>>({ defaultValues: { productType: 'product', unit: 'unidad', reason: 'count', paymentMethod: 'cash', type: 'asset', role: 'cashier' } });
   const currentFields = fieldSet[activePath] || [];
@@ -214,7 +257,7 @@ function AppShell({ me }: { me: TeamUser }) {
         {activePath === '/settings' && <SettingsPage role={role}/>}
         {activePath === '/team' && <TeamPage me={me}/>}
         {dataForPage() && <section>
-          <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-sm font-medium text-[#82908f]">{subtitle(activePath)}</p><h2 className="mt-1 text-3xl font-bold">{title}</h2></div><div className="flex gap-2"><label className="relative flex-1 sm:w-64"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#879291]" size={17}/><Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." className="h-11 border-[#e3ddd1] bg-white pl-10" data-testid="input-search"/></label>{addLabel[activePath] && allowedAdd[activePath] && <Button onClick={openModal} className="h-11 gap-2 bg-[#bd4778] hover:bg-[#a83968]" data-testid="button-create"><Plus size={17}/><span className="hidden sm:inline">{addLabel[activePath]}</span><span className="sm:hidden">Agregar</span></Button>}</div></div>
+          <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-sm font-medium text-[#82908f]">{subtitle(activePath)}{['/sales', '/purchases'].includes(activePath) && <span className="ml-2 text-[#398477]">· Sincroniza entre dispositivos cada 5 segundos</span>}</p><h2 className="mt-1 text-3xl font-bold">{title}</h2></div><div className="flex gap-2"><label className="relative flex-1 sm:w-64"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#879291]" size={17}/><Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." className="h-11 border-[#e3ddd1] bg-white pl-10" data-testid="input-search"/></label>{addLabel[activePath] && allowedAdd[activePath] && <Button onClick={openModal} className="h-11 gap-2 bg-[#bd4778] hover:bg-[#a83968]" data-testid="button-create"><Plus size={17}/><span className="hidden sm:inline">{addLabel[activePath]}</span><span className="sm:hidden">Agregar</span></Button>}</div></div>
           {activePath === '/products' && <div className="mb-5 grid gap-3 sm:grid-cols-3"><MiniStat label="Productos activos" value={String(products.filter((p: any) => p.active).length)}/><MiniStat label="Por reponer" value={String(products.filter((p: any) => p.stock - (p.reservedStock || 0) <= p.minStock).length)} tone="pink"/><MiniStat label="Categorías" value={String(new Set(products.map((p: any) => p.category)).size)}/></div>}
           {(activePath === '/customers' || activePath === '/suppliers') && <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#d8e8e2] bg-[#f1f8f5] p-4 text-sm text-[#3d6660]"><span>Saldos calculados por el sistema. {activePath === '/customers' ? 'Registra abonos de clientes' : 'Registra pagos a proveedores'} en Contabilidad, pestaña Cobros y pagos.</span><Link href="/accounting" className="font-bold text-[#bd4778]" data-testid="link-settlements">Ir a cobros y pagos</Link></div>}
           {activePath === '/inventory' && <div className="mb-5 rounded-2xl border border-[#f0d9e2] bg-[#fff4f7] p-4 text-sm text-[#76515e]"><b>Control de existencias</b> · Registra conteos, pérdidas, daños y correcciones. Los cambios quedan en el historial.</div>}
@@ -337,7 +380,7 @@ function PosPage({ products, productsLoading, customers, taxRates, createSale, i
     });
   };
   if (receipt) return <div className="mx-auto max-w-3xl"><div className="mb-5 flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm text-[#82908f]">Venta finalizada</p><h2 className="text-3xl font-bold">Recibo {receipt.receiptNumber}</h2></div><div className="flex gap-2"><Button variant="outline" onClick={() => window.print()} className="gap-2" data-testid="button-print"><Printer size={16}/> Imprimir</Button><Button onClick={() => setReceipt(null)} className="bg-[#bd4778]" data-testid="button-new-sale">Nueva venta</Button></div></div><Receipt sale={receipt}/><div className="receipt-print"><Receipt sale={receipt}/></div></div>;
-  return <div><div className="mb-5 flex flex-wrap items-end justify-between gap-3"><div><p className="text-sm text-[#82908f]">Atención rápida · DOP</p><h2 className="text-3xl font-bold">Caja rápida</h2></div><div className="flex items-center gap-2 rounded-xl bg-[#e4f1ed] px-3 py-2 text-xs font-bold text-[#398477]"><span className="h-2 w-2 rounded-full bg-[#45a18d]"/> Caja lista</div></div>
+  return <div><div className="mb-5 flex flex-wrap items-end justify-between gap-3"><div><p className="text-sm text-[#82908f]">Atención rápida · DOP · existencias sincronizadas cada 5 segundos</p><h2 className="text-3xl font-bold">Caja rápida</h2></div><div className="flex items-center gap-2 rounded-xl bg-[#e4f1ed] px-3 py-2 text-xs font-bold text-[#398477]"><span className="h-2 w-2 rounded-full bg-[#45a18d]"/> Caja lista</div></div>
     <CashBar/>
     <div className="grid gap-5 xl:grid-cols-[1fr_390px]">
       <section className="min-w-0"><label className="relative mb-4 block"><Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#81908e]" size={19}/><Input autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Busca o escanea el código de barras..." className="h-14 border-[#e5dfd3] bg-white pl-12 text-base shadow-sm" data-testid="input-pos-search"/><span className="absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md bg-[#f4f0e7] px-2 py-1 text-[10px] text-[#899492] sm:block">LECTOR USB · TECLADO</span></label>
