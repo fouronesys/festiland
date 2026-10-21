@@ -111,6 +111,10 @@ el secreto de recuperación; el siguiente acceso exige cambiar esa contraseña.
 
 ## Zoho SMTP
 
+Para la cuenta configurada en esta instalación se verificó **`smtp.zoho.com`,
+puerto 465 con SSL/TLS**. Si se instala una base vacía en CapRover, seleccionar
+ese servidor en Preferencias antes de probar estas mismas credenciales.
+
 En **Preferencias → Correo saliente** configurar el servidor exacto que muestra
 Zoho para la cuenta y su región: `smtppro.zoho.com` suele corresponder a cuentas de
 dominio de pago; `smtp.zoho.com`, a otras cuentas. Se permiten **465 con SSL** o
