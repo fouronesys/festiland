@@ -12,11 +12,24 @@ import {
 } from "@workspace/db";
 import { getMember, requireRole } from "../middlewares/festilandAuth";
 import { ensureSystemAccounts, systemAccountId, type DbTx } from "../lib/accounting";
+import { automaticLockedThrough, localAccountingDate } from "../lib/accounting-periods";
 import { AppError } from "../lib/appError";
 
 const router: IRouter = Router();
 const round = (amount: number) => Math.round(amount * 100) / 100;
-const localDate = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santo_Domingo" }).format(new Date());
+const accountingPeriodKeys = ["accountingPeriodStart", "accountingPeriodEnd"] as const;
+const isCalendarDate = (value: string) =>
+  /^\d{4}-\d{2}-\d{2}$/.test(value)
+  && !Number.isNaN(Date.parse(`${value}T12:00:00Z`))
+  && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;
+
+function storeSettingsResponse(row: typeof storeSettingsTable.$inferSelect) {
+  const today = localAccountingDate();
+  return {
+    ...row,
+    automaticLockedThrough: automaticLockedThrough(row.accountingPeriodStart, row.accountingPeriodEnd, today),
+  };
+}
 
 async function settings(tx: DbTx) {
   await tx.insert(storeSettingsTable).values({ id: "main" }).onConflictDoNothing();
@@ -25,7 +38,7 @@ async function settings(tx: DbTx) {
 }
 
 router.get("/store-settings", async (_req, res) => {
-  res.json(GetStoreSettingsResponse.parse(await settings(db)));
+  res.json(GetStoreSettingsResponse.parse(storeSettingsResponse(await settings(db))));
 });
 
 router.patch("/store-settings", requireRole("owner", "manager", "accountant"), async (req, res): Promise<void> => {
@@ -35,31 +48,70 @@ router.patch("/store-settings", requireRole("owner", "manager", "accountant"), a
     return;
   }
   const actor = getMember(res);
-  if (actor.role === "accountant" && Object.keys(body.data).some(key => key !== "lockedThrough")) {
+  const today = localAccountingDate();
+  const updatesPeriod = accountingPeriodKeys.some(key => key in body.data);
+  const updatesLock = "lockedThrough" in body.data;
+  const accountingKeys = new Set<string>(["lockedThrough", ...accountingPeriodKeys]);
+  if (actor.role === "accountant" && Object.keys(body.data).some(key => !accountingKeys.has(key))) {
     throw new AppError(403, "El contable sólo puede modificar el cierre de períodos.");
   }
-  if ("lockedThrough" in body.data && !["owner", "accountant"].includes(actor.role)) {
+  if ((updatesLock || updatesPeriod) && !["owner", "accountant"].includes(actor.role)) {
     throw new AppError(403, "Sólo el propietario o contable puede cerrar períodos.");
   }
   const date = body.data.lockedThrough;
-  if (date && (date > localDate() || Number.isNaN(Date.parse(`${date}T12:00:00Z`)) || new Date(`${date}T12:00:00Z`).toISOString().slice(0, 10) !== date)) {
+  if (date && (date > today || !isCalendarDate(date))) {
     throw new AppError(400, "El cierre debe ser una fecha válida, no posterior a hoy.");
   }
   const saved = await db.transaction(async tx => {
     const current = await settings(tx);
+    let updateValues = { ...body.data };
+    let archivedEnd: string | null = null;
+    if (updatesPeriod) {
+      const start = "accountingPeriodStart" in body.data
+        ? body.data.accountingPeriodStart ?? null
+        : current.accountingPeriodStart;
+      const end = "accountingPeriodEnd" in body.data
+        ? body.data.accountingPeriodEnd ?? null
+        : current.accountingPeriodEnd;
+      if ((start === null) !== (end === null)) {
+        throw new AppError(400, "Define el inicio y el fin del período, o deja ambos vacíos.");
+      }
+      if ((start && !isCalendarDate(start)) || (end && !isCalendarDate(end))) {
+        throw new AppError(400, "Las fechas del período no son válidas.");
+      }
+      if (start && end && start > end) {
+        throw new AppError(400, "El inicio del período debe ser anterior o igual al cierre.");
+      }
+
+      const changed = start !== current.accountingPeriodStart || end !== current.accountingPeriodEnd;
+      const currentPeriodEnded = current.accountingPeriodEnd && current.accountingPeriodEnd < today;
+      if (changed && currentPeriodEnded) {
+        if (actor.role !== "owner") {
+          throw new AppError(403, "Sólo el propietario puede cambiar un período ya cerrado.");
+        }
+        archivedEnd = current.accountingPeriodEnd;
+        const preservedLock = [current.lockedThrough, archivedEnd]
+          .filter((value): value is string => !!value)
+          .sort()
+          .at(-1);
+        if (preservedLock) updateValues = { ...updateValues, lockedThrough: preservedLock };
+      }
+    }
     if (current.lockedThrough && "lockedThrough" in body.data
       && (!date || date < current.lockedThrough) && actor.role !== "owner") {
       throw new AppError(403, "Sólo el propietario puede reabrir un período.");
     }
-    const [row] = await tx.update(storeSettingsTable).set(body.data)
+    const [row] = await tx.update(storeSettingsTable).set(updateValues)
       .where(eq(storeSettingsTable.id, "main")).returning();
     await tx.insert(auditLogTable).values({
       actorId: actor.id, action: "update", entity: "settings", entityId: "main",
-      details: "lockedThrough" in body.data ? `Cierre hasta ${date ?? "sin bloqueo"}` : "Datos del comercio actualizados",
+      details: updatesPeriod
+        ? `Período contable ${row.accountingPeriodStart ?? "sin inicio"} a ${row.accountingPeriodEnd ?? "sin fin"}${archivedEnd ? `; rango anterior ${current.accountingPeriodStart ?? "sin inicio"} a ${archivedEnd} preservado como cerrado` : ""}`
+        : updatesLock ? `Cierre hasta ${date ?? "sin bloqueo"}` : "Datos del comercio actualizados",
     });
     return row;
   });
-  res.json(UpdateStoreSettingsResponse.parse(saved));
+  res.json(UpdateStoreSettingsResponse.parse(storeSettingsResponse(saved)));
 });
 
 async function expectedCash(tx: DbTx, session: typeof cashSessionsTable.$inferSelect) {

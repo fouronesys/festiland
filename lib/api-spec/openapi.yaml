@@ -1167,7 +1167,10 @@ components:
         receiptFooter: { type: string }
         receiptPaper: { type: string, enum: [58mm, 80mm, A4] }
         lockedThrough: { type: ["string", "null"], pattern: '^\d{4}-\d{2}-\d{2}$' }
-      required: [name, taxId, address, phone, receiptFooter, receiptPaper, lockedThrough]
+        accountingPeriodStart: { type: ["string", "null"], pattern: '^\d{4}-\d{2}-\d{2}$' }
+        accountingPeriodEnd: { type: ["string", "null"], pattern: '^\d{4}-\d{2}-\d{2}$' }
+        automaticLockedThrough: { type: ["string", "null"], pattern: '^\d{4}-\d{2}-\d{2}$' }
+      required: [name, taxId, address, phone, receiptFooter, receiptPaper, lockedThrough, accountingPeriodStart, accountingPeriodEnd, automaticLockedThrough]
     StoreSettingsUpdate:
       type: object
       properties:
@@ -1178,6 +1181,8 @@ components:
         receiptFooter: { type: string }
         receiptPaper: { type: string, enum: [58mm, 80mm, A4] }
         lockedThrough: { type: ["string", "null"], pattern: '^\d{4}-\d{2}-\d{2}$' }
+        accountingPeriodStart: { type: ["string", "null"], pattern: '^\d{4}-\d{2}-\d{2}$' }
+        accountingPeriodEnd: { type: ["string", "null"], pattern: '^\d{4}-\d{2}-\d{2}$' }
     CashSessionInput:
       type: object
       properties:

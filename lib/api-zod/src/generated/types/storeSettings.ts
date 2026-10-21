@@ -22,4 +22,19 @@ export interface StoreSettings {
      * @pattern ^\d{4}-\d{2}-\d{2}$
      */
   lockedThrough: string | null;
+  /**
+     * @nullable
+     * @pattern ^\d{4}-\d{2}-\d{2}$
+     */
+  accountingPeriodStart: string | null;
+  /**
+     * @nullable
+     * @pattern ^\d{4}-\d{2}-\d{2}$
+     */
+  accountingPeriodEnd: string | null;
+  /**
+     * @nullable
+     * @pattern ^\d{4}-\d{2}-\d{2}$
+     */
+  automaticLockedThrough: string | null;
 }

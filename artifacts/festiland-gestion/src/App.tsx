@@ -435,8 +435,14 @@ function JournalComposer({ accounts, createJournal, invalidate }: any) {
   const form = useForm({ defaultValues: { date: todayDO(), description: '', debitAccount: '', creditAccount: '', amount: '' } });
   const { data: store } = useStoreSettings();
   const locked = store?.lockedThrough || null;
+  const automaticLockStart = store?.accountingPeriodStart || null;
+  const automaticLockEnd = store?.automaticLockedThrough || null;
   const submit = form.handleSubmit(async values => {
     if (locked && values.date <= locked) { setMessage(`El período está cerrado hasta ${locked}. Usa una fecha posterior.`); return; }
+    if (automaticLockStart && automaticLockEnd && values.date >= automaticLockStart && values.date <= automaticLockEnd) {
+      setMessage(`El período contable ${automaticLockStart}–${automaticLockEnd} está cerrado automáticamente.`);
+      return;
+    }
     const amount = Number(values.amount);
     if (!values.debitAccount || !values.creditAccount || values.debitAccount === values.creditAccount || amount <= 0) {
       setMessage('Selecciona dos cuentas distintas y un monto mayor que cero.');

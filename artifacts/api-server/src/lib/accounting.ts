@@ -1,6 +1,7 @@
 import { and, eq, lte, sql } from "drizzle-orm";
 import { db, accountsTable, journalEntriesTable, journalLinesTable, storeSettingsTable, auditLogTable } from "@workspace/db";
 import { AppError } from "./appError";
+import { isDateInAutomaticallyClosedPeriod } from "./accounting-periods";
 
 export type DbTx = Pick<typeof db, "select" | "insert" | "update" | "run">;
 
@@ -61,6 +62,13 @@ export async function postJournalEntry(
     .where(eq(storeSettingsTable.id, "main"));
   if (settings?.lockedThrough && input.date <= settings.lockedThrough) {
     throw new AppError(409, `El período está bloqueado hasta ${settings.lockedThrough}. No se modificó la operación.`);
+  }
+  if (isDateInAutomaticallyClosedPeriod(
+    settings?.accountingPeriodStart,
+    settings?.accountingPeriodEnd,
+    input.date,
+  )) {
+    throw new AppError(409, `El período contable ${settings?.accountingPeriodStart}–${settings?.accountingPeriodEnd} está cerrado automáticamente. No se admiten asientos dentro de ese rango.`);
   }
   const lines = input.lines.map(line => ({
     ...line, debit: Math.round(line.debit * 100) / 100, credit: Math.round(line.credit * 100) / 100,

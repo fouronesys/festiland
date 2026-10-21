@@ -692,6 +692,9 @@ export const CreatePurchaseResponse = zod.object({
  * @summary Get shared business and receipt settings
  */
 export const getStoreSettingsResponseLockedThroughRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const getStoreSettingsResponseAccountingPeriodStartRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const getStoreSettingsResponseAccountingPeriodEndRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const getStoreSettingsResponseAutomaticLockedThroughRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
 
 export const GetStoreSettingsResponse = zod.object({
@@ -701,7 +704,10 @@ export const GetStoreSettingsResponse = zod.object({
   "phone": zod.string().nullable(),
   "receiptFooter": zod.string(),
   "receiptPaper": zod.enum(['58mm', '80mm', 'A4']),
-  "lockedThrough": zod.string().regex(getStoreSettingsResponseLockedThroughRegExp).nullable()
+  "lockedThrough": zod.string().regex(getStoreSettingsResponseLockedThroughRegExp).nullable(),
+  "accountingPeriodStart": zod.string().regex(getStoreSettingsResponseAccountingPeriodStartRegExp).nullable(),
+  "accountingPeriodEnd": zod.string().regex(getStoreSettingsResponseAccountingPeriodEndRegExp).nullable(),
+  "automaticLockedThrough": zod.string().regex(getStoreSettingsResponseAutomaticLockedThroughRegExp).nullable()
 })
 
 
@@ -710,6 +716,8 @@ export const GetStoreSettingsResponse = zod.object({
  */
 
 export const updateStoreSettingsBodyLockedThroughRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const updateStoreSettingsBodyAccountingPeriodStartRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const updateStoreSettingsBodyAccountingPeriodEndRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
 
 export const UpdateStoreSettingsBody = zod.object({
@@ -719,10 +727,15 @@ export const UpdateStoreSettingsBody = zod.object({
   "phone": zod.string().nullish(),
   "receiptFooter": zod.string().optional(),
   "receiptPaper": zod.enum(['58mm', '80mm', 'A4']).optional(),
-  "lockedThrough": zod.string().regex(updateStoreSettingsBodyLockedThroughRegExp).nullish()
+  "lockedThrough": zod.string().regex(updateStoreSettingsBodyLockedThroughRegExp).nullish(),
+  "accountingPeriodStart": zod.string().regex(updateStoreSettingsBodyAccountingPeriodStartRegExp).nullish(),
+  "accountingPeriodEnd": zod.string().regex(updateStoreSettingsBodyAccountingPeriodEndRegExp).nullish()
 })
 
 export const updateStoreSettingsResponseLockedThroughRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const updateStoreSettingsResponseAccountingPeriodStartRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const updateStoreSettingsResponseAccountingPeriodEndRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const updateStoreSettingsResponseAutomaticLockedThroughRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
 
 export const UpdateStoreSettingsResponse = zod.object({
@@ -732,7 +745,10 @@ export const UpdateStoreSettingsResponse = zod.object({
   "phone": zod.string().nullable(),
   "receiptFooter": zod.string(),
   "receiptPaper": zod.enum(['58mm', '80mm', 'A4']),
-  "lockedThrough": zod.string().regex(updateStoreSettingsResponseLockedThroughRegExp).nullable()
+  "lockedThrough": zod.string().regex(updateStoreSettingsResponseLockedThroughRegExp).nullable(),
+  "accountingPeriodStart": zod.string().regex(updateStoreSettingsResponseAccountingPeriodStartRegExp).nullable(),
+  "accountingPeriodEnd": zod.string().regex(updateStoreSettingsResponseAccountingPeriodEndRegExp).nullable(),
+  "automaticLockedThrough": zod.string().regex(updateStoreSettingsResponseAutomaticLockedThroughRegExp).nullable()
 })
 
 

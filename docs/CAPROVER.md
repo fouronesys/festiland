@@ -44,6 +44,20 @@ La aplicación no utiliza las antiguas claves de Clerk ni `SESSION_SECRET`.
 8. Confirmar que los datos siguen presentes tras un redespliegue antes de operar.
    **Sin el volumen `/data`, los datos se perderán al reemplazar el contenedor.**
 
+## Período contable y bloqueo automático
+
+En **Preferencias → Período contable**, propietario o contable define inicio y último
+día del período. El sistema lo mantiene abierto hasta el final de ese último día en
+`America/Santo_Domingo`; al empezar el siguiente día, rechaza nuevos asientos con
+fecha dentro del período, incluidos los generados por ventas, compras, gastos y
+ajustes. No depende de un cron ni de que alguien abra la aplicación a medianoche.
+Los asientos fechados fuera del rango no se bloquean por el cierre automático.
+
+Al cambiar un período ya terminado, la fecha de cierre anterior se conserva en el
+bloqueo manual para no reabrirlo accidentalmente. Solo el propietario puede cambiar
+un período ya cerrado. El **bloqueo manual adicional** sigue disponible para
+proteger de inmediato una fecha anterior.
+
 ## Trasladar la instalación actual
 
 El reinicio autorizado dejó operaciones, saldos y existencias en cero y conservó

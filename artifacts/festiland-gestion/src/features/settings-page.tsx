@@ -12,12 +12,17 @@ import { Textarea } from '@/components/ui/textarea';
 import { Form } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import { EmptyState, ErrorBlock, LoadingBlock, fieldClass, labelClass } from '@/components/states';
-import { can, dateLabel, dateTimeLabel, type Role } from '@/lib/access';
+import { can, dateLabel, dateTimeLabel, todayDO, type Role } from '@/lib/access';
 import { useStoreSettings } from './receipt';
 import { ChangePasswordForm } from './local-auth';
 import { OwnerSettings } from './owner-settings';
 
 type StoreForm = { name: string; taxId: string; address: string; phone: string; receiptFooter: string; receiptPaper: '58mm' | '80mm' | 'A4' };
+
+function nextCalendarDay(value: string) {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
+}
 
 export function SettingsPage({ role }: { role?: Role }) {
   const qc = useQueryClient();
@@ -28,6 +33,8 @@ export function SettingsPage({ role }: { role?: Role }) {
   const canLock = can.lockPeriod(role);
   const form = useForm<StoreForm>({ defaultValues: { name: '', taxId: '', address: '', phone: '', receiptFooter: '', receiptPaper: '80mm' } });
   const [lockDate, setLockDate] = useState('');
+  const [periodStart, setPeriodStart] = useState('');
+  const [periodEnd, setPeriodEnd] = useState('');
   const initialized = useRef(false);
   const store = settingsQ.data;
 
@@ -36,6 +43,8 @@ export function SettingsPage({ role }: { role?: Role }) {
       initialized.current = true;
       form.reset({ name: store.name, taxId: store.taxId || '', address: store.address || '', phone: store.phone || '', receiptFooter: store.receiptFooter || '', receiptPaper: store.receiptPaper });
       setLockDate(store.lockedThrough || '');
+      setPeriodStart(store.accountingPeriodStart || '');
+      setPeriodEnd(store.accountingPeriodEnd || '');
     }
   }, [store, form]);
 
@@ -44,7 +53,15 @@ export function SettingsPage({ role }: { role?: Role }) {
     await qc.invalidateQueries({ queryKey: getListAuditLogQueryKey() });
     toast({ title: msg });
   };
-  const fail = () => toast({ title: 'No se pudo guardar', description: 'Revisa los datos o tus permisos.', variant: 'destructive' });
+  const fail = (error: unknown) => {
+    const data = error && typeof error === 'object' && 'data' in error
+      ? (error as { data?: unknown }).data
+      : null;
+    const message = data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
+      ? data.error
+      : 'Revisa los datos o tus permisos.';
+    toast({ title: 'No se pudo guardar', description: message, variant: 'destructive' });
+  };
 
   const saveStore = form.handleSubmit(values => {
     if (!values.name.trim()) { form.setError('name', { message: 'El nombre es obligatorio.' }); return; }
@@ -53,9 +70,32 @@ export function SettingsPage({ role }: { role?: Role }) {
     });
   });
   const saveLock = (value: string | null) => update.mutate({ data: { lockedThrough: value } }, {
-    onSuccess: async data => { setLockDate(data.lockedThrough || ''); await qc.invalidateQueries({ queryKey: getListJournalEntriesQueryKey() }); await afterSave(data, value ? 'Período bloqueado' : 'Bloqueo retirado'); },
+    onSuccess: async data => { setLockDate(data.lockedThrough || ''); await qc.invalidateQueries({ queryKey: getListJournalEntriesQueryKey() }); await afterSave(data, value ? 'Bloqueo manual aplicado' : 'Bloqueo manual retirado'); },
     onError: fail,
   });
+  const savePeriod = () => {
+    if (!!periodStart !== !!periodEnd) {
+      toast({ title: 'Completa el período', description: 'Indica tanto la fecha de inicio como la fecha de cierre.', variant: 'destructive' });
+      return;
+    }
+    if (periodStart && periodEnd && periodStart > periodEnd) {
+      toast({ title: 'Revisa las fechas', description: 'El inicio debe ser anterior o igual al cierre.', variant: 'destructive' });
+      return;
+    }
+    update.mutate({ data: { accountingPeriodStart: periodStart || null, accountingPeriodEnd: periodEnd || null } }, {
+      onSuccess: async data => {
+        setPeriodStart(data.accountingPeriodStart || '');
+        setPeriodEnd(data.accountingPeriodEnd || '');
+        setLockDate(data.lockedThrough || '');
+        await qc.invalidateQueries({ queryKey: getListJournalEntriesQueryKey() });
+        await afterSave(data, 'Período contable guardado');
+      },
+      onError: fail,
+    });
+  };
+  const periodChanged = !!store && (periodStart !== (store.accountingPeriodStart || '') || periodEnd !== (store.accountingPeriodEnd || ''));
+  const closedPeriodEditDenied = !!store?.automaticLockedThrough && role !== 'owner';
+  const autoLockDate = store?.accountingPeriodEnd ? nextCalendarDay(store.accountingPeriodEnd) : null;
 
   if (settingsQ.isLoading) return <LoadingBlock/>;
   if (settingsQ.isError) return <ErrorBlock retry={settingsQ.refetch}/>;
@@ -83,17 +123,32 @@ export function SettingsPage({ role }: { role?: Role }) {
       <p className="mt-4 text-xs leading-5 text-[#83908e]">Los recibos se imprimen con el navegador. En el diálogo de impresión elige la impresora y el tamaño de papel que coincida con el formato seleccionado. Los recibos son documentos internos, no comprobantes fiscales.</p>
     </section>
 
-    <section className="rounded-2xl border border-[#e8e2d6] bg-white p-6">
-      <div className="flex items-start gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#fcf2d2] text-[#967422]"><Lock size={18}/></span><div><h3 className="text-xl font-bold">Cierre de período contable</h3><p className="text-sm text-[#82908f]">No se podrán registrar nuevos asientos con fecha igual o anterior a la fecha bloqueada.</p></div></div>
-      <div className="mt-4 flex flex-wrap items-end gap-3">
-        <label className={labelClass}>Bloqueado hasta<Input type="date" value={lockDate} onChange={e => setLockDate(e.target.value)} disabled={!canLock || update.isPending} className="h-11 w-48" data-testid="input-locked-through"/></label>
-        {canLock ? <>
-          <Button disabled={!lockDate || update.isPending || lockDate === (store?.lockedThrough || '') || (!can.reopenPeriod(role) && !!store?.lockedThrough && lockDate < store.lockedThrough)} onClick={() => saveLock(lockDate)} className="h-11 bg-[#214447]" data-testid="button-save-lock">Aplicar bloqueo</Button>
-          {store?.lockedThrough && can.reopenPeriod(role) && <Button variant="outline" disabled={update.isPending} onClick={() => saveLock(null)} className="h-11" data-testid="button-clear-lock">Quitar bloqueo</Button>}
-        </> : <p className="text-sm text-[#82908f]">Solo propietario o contable pueden cambiarlo.</p>}
+    <section className="rounded-2xl border border-[#e8e2d6] bg-white p-6" data-testid="section-accounting-period">
+      <div className="flex items-start gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#fcf2d2] text-[#967422]"><Lock size={18}/></span><div><h3 className="text-xl font-bold">Período contable</h3><p className="text-sm text-[#82908f]">Define el inicio y el último día. El sistema bloqueará automáticamente los asientos del período al comenzar el día siguiente al cierre, según la hora de República Dominicana.</p></div></div>
+      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        <label className={labelClass}>Inicio del período<Input type="date" value={periodStart} onChange={e => setPeriodStart(e.target.value)} disabled={!canLock || update.isPending || closedPeriodEditDenied} className="h-11" data-testid="input-accounting-period-start"/></label>
+        <label className={labelClass}>Último día del período<Input type="date" value={periodEnd} min={periodStart || undefined} onChange={e => setPeriodEnd(e.target.value)} disabled={!canLock || update.isPending || closedPeriodEditDenied} className="h-11" data-testid="input-accounting-period-end"/></label>
       </div>
-      {canLock && !can.reopenPeriod(role) && store?.lockedThrough && <p className="mt-2 text-xs text-[#967422]" data-testid="text-reopen-owner-only">Como contable puedes avanzar la fecha de cierre. Reabrir o retroceder un período cerrado solo lo puede hacer el propietario.</p>}
-      <p className="mt-3 text-sm" data-testid="text-locked-through">Estado: <b>{store?.lockedThrough ? `bloqueado hasta ${dateLabel(store.lockedThrough + 'T12:00:00')}` : 'sin bloqueo'}</b></p>
+      {periodEnd && periodEnd < todayDO() && periodEnd !== store?.accountingPeriodEnd && <p className="mt-3 rounded-xl bg-[#fff7e8] p-3 text-sm text-[#8b6526]">Este período ya terminó. Al guardarlo, el bloqueo automático se aplicará de inmediato hasta {dateLabel(periodEnd + 'T12:00:00')}.</p>}
+      {closedPeriodEditDenied && <p className="mt-3 text-sm text-[#967422]">El período ya está cerrado. Solo el propietario puede cambiar su configuración.</p>}
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        {canLock && <Button disabled={update.isPending || !periodChanged || !!closedPeriodEditDenied} onClick={savePeriod} className="h-11 gap-2 bg-[#214447]" data-testid="button-save-accounting-period"><Save size={16}/>{update.isPending ? 'Guardando…' : 'Guardar período'}</Button>}
+        {!canLock && <p className="text-sm text-[#82908f]">Solo propietario o contable pueden definir el período.</p>}
+      </div>
+      <p className="mt-3 text-sm" data-testid="text-accounting-period-status"><b>Estado del período:</b> {!store?.accountingPeriodStart || !store?.accountingPeriodEnd ? 'sin definir; indica el inicio y el cierre para activar el bloqueo automático.' : store.automaticLockedThrough ? `cerrado automáticamente hasta ${dateLabel(store.automaticLockedThrough + 'T12:00:00')}.` : `abierto; el bloqueo se activará el ${autoLockDate ? dateLabel(autoLockDate + 'T12:00:00') : 'día siguiente al cierre'}.`}</p>
+      <p className="mt-1 text-sm" data-testid="text-locked-through"><b>Bloqueo manual vigente:</b> {store?.lockedThrough ? `hasta ${dateLabel(store.lockedThrough + 'T12:00:00')}` : 'ninguno'}.</p>
+      <div className="mt-6 border-t border-[#eee8dd] pt-5">
+        <h4 className="font-bold">Bloqueo manual adicional</h4>
+        <p className="mt-1 text-sm text-[#82908f]">Para bloquear registros antes de que termine el período; solo admite hoy o una fecha anterior.</p>
+        <div className="mt-3 flex flex-wrap items-end gap-3">
+          <label className={labelClass}>Bloquear hasta<Input type="date" value={lockDate} max={todayDO()} onChange={e => setLockDate(e.target.value)} disabled={!canLock || update.isPending} className="h-11 w-48" data-testid="input-locked-through"/></label>
+          {canLock ? <>
+            <Button disabled={!lockDate || update.isPending || lockDate === (store?.lockedThrough || '') || (!can.reopenPeriod(role) && !!store?.lockedThrough && lockDate < store.lockedThrough)} onClick={() => saveLock(lockDate)} className="h-11 bg-[#214447]" data-testid="button-save-lock">Aplicar bloqueo</Button>
+            {store?.lockedThrough && can.reopenPeriod(role) && <Button variant="outline" disabled={update.isPending} onClick={() => saveLock(null)} className="h-11" data-testid="button-clear-lock">Quitar bloqueo manual</Button>}
+          </> : null}
+        </div>
+        {canLock && !can.reopenPeriod(role) && store?.lockedThrough && <p className="mt-2 text-xs text-[#967422]" data-testid="text-reopen-owner-only">Solo el propietario puede retirar o retroceder el bloqueo manual.</p>}
+      </div>
     </section>
 
     <section className="rounded-2xl border border-[#e8e2d6] bg-white p-6" data-testid="section-change-password">

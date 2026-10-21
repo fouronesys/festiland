@@ -108,6 +108,7 @@ export const storeSettingsTable = sqliteTable("festiland_store_settings", {
   taxId: text("tax_id"), address: text("address"), phone: text("phone"),
   receiptFooter: text("receipt_footer").notNull().default("Gracias por celebrar con Festiland"),
   receiptPaper: text("receipt_paper").notNull().default("80mm"), lockedThrough: text("locked_through"),
+  accountingPeriodStart: text("accounting_period_start"), accountingPeriodEnd: text("accounting_period_end"),
 });
 export const cashSessionsTable = sqliteTable("festiland_cash_sessions", {
   id: id(), userId: text("user_id").notNull(), openedAt: time("opened_at").notNull().$defaultFn(() => new Date()),
