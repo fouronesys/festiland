@@ -1,2 +1,3 @@
 - [Versiones compartidas de React](shared-react-versions.md) — mantener React y React DOM alineados en el catálogo del workspace, también cuando una integración exige actualizar.
 - [Autenticación SMTP de Zoho](zoho-smtp-auth.md) — un rechazo EAUTH/554 puede indicar servidor incorrecto para el tipo de cuenta, no una contraseña inválida.
+- [Pruebas Docker en Replit](docker-smoke-check.md) — usar puertos dinámicos y solicitudes HTTP del host; `docker exec` puede fallar aunque la app esté sana.

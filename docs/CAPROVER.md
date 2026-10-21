@@ -17,7 +17,7 @@ El navegador sí se comunica con el servidor propio de Festiland.
 3. Mantener **una sola instancia/réplica**. SQLite y las transacciones asíncronas
    se coordinan dentro de ese proceso; no montar el archivo en NFS ni compartirlo
    entre varias instancias. Evitar despliegues con dos procesos escribiendo a la vez.
-4. En HTTP Settings: **Container HTTP Port 3000**, dominio, HTTPS y Enforce HTTPS.
+4. En HTTP Settings: **Container HTTP Port 80**, dominio, HTTPS y Enforce HTTPS.
 5. Configurar las variables en tiempo de ejecución, nunca en el código o la imagen:
 
 | Variable | Uso |
@@ -29,7 +29,9 @@ El navegador sí se comunica con el servidor propio de Festiland.
 | `ZOHO_SMTP_PASSWORD` | Contraseña de aplicación Zoho; no incluirla en un archivo del repositorio. |
 
 La imagen define `SQLITE_PATH=/data/festiland.sqlite`, `MIGRATIONS_DIR=/app/migrations`,
-`STATIC_DIR=/app/public`, `SERVE_STATIC=true`, `NODE_ENV=production` y `PORT=3000`.
+`STATIC_DIR=/app/public`, `SERVE_STATIC=true`, `NODE_ENV=production` y `PORT=80`.
+Node continúa ejecutándose como usuario `node`; la imagen le concede únicamente la
+capacidad de enlazarse a puertos inferiores a 1024, necesaria para escuchar en 80.
 **No configurar `DATABASE_URL`** ni copiar las rutas de desarrollo de Replit.
 La aplicación no utiliza las antiguas claves de Clerk ni `SESSION_SECRET`.
 

@@ -11,19 +11,24 @@ RUN pnpm --filter @workspace/api-server deploy --prod --legacy /runtime
 FROM node:24-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
-    PORT=3000 \
+    PORT=80 \
     SERVE_STATIC=true \
     STATIC_DIR=/app/public \
     MIGRATIONS_DIR=/app/migrations \
     SQLITE_PATH=/data/festiland.sqlite
-RUN mkdir -p /data && chown node:node /data
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libcap2-bin \
+    && setcap 'cap_net_bind_service=+ep' /usr/local/bin/node \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /data \
+    && chown node:node /data
 COPY --from=build --chown=node:node /runtime/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/artifacts/api-server/dist ./dist
 COPY --from=build --chown=node:node /app/artifacts/festiland-gestion/dist/public ./public
 COPY --from=build --chown=node:node /app/lib/db/migrations-sqlite ./migrations
 COPY --chown=node:node deploy/start.sh ./start.sh
 USER node
-EXPOSE 3000
+EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=5s --start-period=45s \
-  CMD node -e "fetch('http://127.0.0.1:3000/api/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:80/api/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["sh", "/app/start.sh"]
