@@ -9,6 +9,7 @@ import { Eye, EyeOff, KeyRound, LockKeyhole, LogOut, ServerCog } from 'lucide-re
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingBlock } from '@/components/states';
+import { homeFor } from '@/lib/access';
 import { useToast } from '@/hooks/use-toast';
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -71,9 +72,9 @@ function AuthFrame({ children, wide }: { children: ReactNode; wide?: boolean }) 
   return <main className="relative flex min-h-[100dvh] flex-col items-center justify-center gap-6 overflow-hidden bg-[#f6f2e8] px-4 py-10 text-[#263d40]">
     <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[#f6d76a]/40 blur-3xl"/>
     <div className="pointer-events-none absolute -bottom-32 -left-20 h-80 w-80 rounded-full bg-[#bd4778]/10 blur-3xl"/>
-    <Link href="/" className="relative flex items-center gap-3 font-bold text-[#214447]" data-testid="link-auth-home"><img src={`${basePath}/brand/festiland-logo.png`} className="h-14 w-14 rounded-full object-cover shadow-md" alt="Festiland"/><span className="font-display text-xl">Festiland <span className="text-sm font-semibold text-[#7c8a88]">Gestión</span></span></Link>
+    <Link href="/" className="relative flex items-center gap-3 font-bold text-[#214447]" data-testid="link-auth-home"><img src={`${basePath}/brand/festiland-wordmark.png`} className="h-14 w-auto" alt="Festiland"/><span className="rounded-full bg-white/70 px-2.5 py-1 text-xs font-semibold text-[#7c8a88]">Equipo</span></Link>
     <section className={`page-enter relative w-full ${wide ? 'max-w-lg' : 'max-w-[440px]'} rounded-[24px] border border-[#ebe4d6] bg-[#fffdf8] p-7 shadow-xl shadow-[#415552]/10 sm:p-8`}>{children}</section>
-    <p className="relative text-xs text-[#8a9593]">Acceso privado para el equipo de Festiland · Santo Domingo</p>
+    <p className="relative text-xs text-[#8a9593]">Acceso privado para el equipo de Festiland · Moca</p>
   </main>;
 }
 
@@ -93,7 +94,7 @@ export function SignInScreen() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => () => setPassword(''), []);
-  if (session?.user) return <Redirect to="/" replace/>;
+  if (session?.user) return <Redirect to={homeFor(session.user.role)} replace/>;
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();

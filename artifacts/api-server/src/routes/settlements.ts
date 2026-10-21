@@ -46,8 +46,7 @@ router.post("/settlements", requireRole("owner", "manager", "accountant"), async
   const result = await db.transaction(async (tx) => {
     const kind = input.direction === "receivable" ? "customer" : "supplier";
     const [contact] = await tx.select().from(contactsTable)
-      .where(and(eq(contactsTable.id, input.contactId), eq(contactsTable.kind, kind)))
-      .for("update");
+      .where(and(eq(contactsTable.id, input.contactId), eq(contactsTable.kind, kind)));
     if (!contact) return { error: "Selecciona un contacto válido." };
     const balance = await contactBalance(tx, contact.id, kind);
     const amount = Math.round(input.amount * 100) / 100;

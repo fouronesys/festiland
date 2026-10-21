@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import {
-  db, contactsTable, salesTable, salePaymentsTable, settlementsTable, expensesTable,
+  closeDatabase, db, contactsTable, salesTable, salePaymentsTable, settlementsTable, expensesTable,
   storeSettingsTable, journalEntriesTable, journalLinesTable,
 } from "@workspace/db";
 import { calculateSaleLine } from "../src/lib/saleMath";
@@ -26,7 +26,6 @@ const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santo_Doming
 let passed = false;
 try {
   await db.transaction(async tx => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(6802420)`);
     await tx.insert(storeSettingsTable).values({ id: "main" }).onConflictDoNothing();
     await tx.update(storeSettingsTable).set({ lockedThrough: null }).where(eq(storeSettingsTable.id, "main"));
     await ensureSystemAccounts(tx);
@@ -65,7 +64,7 @@ try {
     assert.equal(await contactBalance(tx, supplier.id, "supplier"), 50);
     await assert.rejects(() => postJournalEntry(tx, { date: today, description: "Desbalance inválido", source: "verification", createdBy: actor,
       lines: [{ accountId: cash, debit: 10, credit: 0 }, { accountId: revenue, debit: 0, credit: 9 }] }), AppError);
-    const [totals] = await tx.select({ balance: sql<number>`SUM(${journalLinesTable.debit} - ${journalLinesTable.credit})::float` })
+    const [totals] = await tx.select({ balance: sql<number>`SUM(${journalLinesTable.debit} - ${journalLinesTable.credit})` })
       .from(journalLinesTable).innerJoin(journalEntriesTable, eq(journalEntriesTable.id, journalLinesTable.entryId))
       .where(eq(journalEntriesTable.createdBy, actor));
     assert.equal(totals.balance, 0);
@@ -86,4 +85,4 @@ console.log("ROLLBACK completo: no se conservaron los registros de verificación
 main().catch(error => {
   console.error(error);
   process.exitCode = 1;
-}).finally(() => db.$client.end());
+}).finally(closeDatabase);

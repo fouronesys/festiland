@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import path from "node:path";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { once } from "node:events";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
-import { readMigrationFiles } from "drizzle-orm/migrator";
+import { createClient } from "@libsql/client/sqlite3";
+import { drizzle } from "drizzle-orm/libsql";
+import { migrate } from "drizzle-orm/libsql/migrator";
+import { migrateLocalDatabase } from "@workspace/db/migrate";
 import {
-  auditLogTable, db, localCredentialsTable, localSessionsTable,
-  loginAttemptsTable, pool, teamMembersTable,
+  auditLogTable, databasePath, db, localCredentialsTable, localSessionsTable,
+  closeDatabase, loginAttemptsTable, teamMembersTable, productsTable, salesTable, journalLinesTable,
 } from "@workspace/db";
 import { hashPassword } from "../src/lib/passwords";
 
@@ -14,7 +19,7 @@ import { hashPassword } from "../src/lib/passwords";
 const run = randomUUID().replaceAll("-", "");
 const prefix = `auth-test-${run}`;
 const ids = ["owner", "manager", "legacy"].map(role => `${prefix}-${role}`);
-const emails = ["owner", "manager", "legacy", "staff", "blocked"].map(role => `${prefix}-${role}@example.invalid`);
+const emails = ["owner", "manager", "legacy", "staff", "blocked", "changed-owner"].map(role => `${prefix}-${role}@example.invalid`);
 const password = `Prueba-${randomBytes(20).toString("base64url")}`;
 const nextPassword = `Nueva-${randomBytes(20).toString("base64url")}`;
 const temporaryPassword = `Temporal-${randomBytes(20).toString("base64url")}`;
@@ -25,27 +30,22 @@ let checks = 0;
 const check = (condition: unknown, message: string) => { assert.ok(condition, message); checks++; };
 
 async function verifyFreshMigration() {
-  const schema = `verify_auth_${run}`;
-  const rollback = new Error("rollback migration fixture");
+  const directory = await mkdtemp(path.join(tmpdir(), "festiland-migration-"));
+  const client = createClient({ url: `file:${path.join(directory, "fresh.sqlite")}` });
   try {
-    await db.transaction(async tx => {
-      await tx.execute(sql`CREATE SCHEMA ${sql.identifier(schema)}`);
-      await tx.execute(sql`SET LOCAL search_path TO ${sql.identifier(schema)}`);
-      for (const migration of readMigrationFiles({ migrationsFolder: path.resolve("lib/db/migrations") })) {
-        for (const statement of migration.sql) {
-          // Isolate default-schema FK references without touching the application schema.
-          await tx.execute(sql.raw(statement.replaceAll('"public".', `"${schema}".`)));
-        }
-      }
-      const rows = await tx.execute(sql`SELECT table_name FROM information_schema.tables WHERE table_schema = ${schema}`);
-      check(rows.rows.length === 22, "Fresh database migration must create the complete schema");
-      throw rollback;
-    });
-  } catch (error) { if (error !== rollback) throw error; }
+    await migrate(drizzle(client), { migrationsFolder: process.env.MIGRATIONS_DIR! });
+    await migrate(drizzle(client), { migrationsFolder: process.env.MIGRATIONS_DIR! });
+    const rows = await client.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'festiland_%'");
+    check(rows.rows.length === 23, "Fresh local database migration must create all tables and be idempotent");
+  } finally { client.close(); await rm(directory, { recursive: true, force: true }); }
 }
 
 async function main() {
+  if (process.env.FESTILAND_TEST_DATABASE !== "1" || !path.basename(databasePath).startsWith("verify-")) {
+    throw new Error("Use FESTILAND_TEST_DATABASE=1 and an isolated SQLITE_PATH named verify-*.sqlite. Never run against operational data.");
+  }
   await verifyFreshMigration();
+  await migrateLocalDatabase();
   const passwordHash = await hashPassword(password);
   await db.transaction(async tx => {
     await tx.insert(teamMembersTable).values(ids.map((id, i) => ({
@@ -133,6 +133,38 @@ async function main() {
   const ownerAgain = await login(emails[0]);
   await db.update(localSessionsTable).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(localSessionsTable.tokenHash, hash(ownerAgain.cookie!.split("=")[1])));
   check((await request("/me", "GET", undefined, ownerAgain.cookie)).status === 401, "Absolute expiry is enforced");
+  const activeOwner = await login(emails[0]);
+  const smtp = await request("/smtp-settings", "GET", undefined, activeOwner.cookie);
+  check(smtp.status === 200 && smtp.body.credentialsConfigured === false && !("password" in smtp.body), "SMTP status exposes no password and reports missing credentials");
+  const managerAgain = await login(emails[1]);
+  check((await request("/smtp-settings", "GET", undefined, managerAgain.cookie)).status === 403, "SMTP configuration is owner-only");
+  check((await request("/auth/change-email", "POST", { newEmail: emails[5], currentPassword: password }, managerAgain.cookie)).status === 403, "Manager cannot use owner email change");
+  check((await request("/smtp-settings", "PATCH", { host: "127.0.0.1", port: 587, fromName: "Prueba", enabled: true }, activeOwner.cookie)).status === 400, "SMTP cannot target arbitrary hosts");
+  check((await request("/smtp-settings", "PATCH", { host: "smtppro.zoho.com", port: 587, fromName: "Prueba", enabled: false }, activeOwner.cookie)).status === 200, "Owner can save Zoho STARTTLS settings locally");
+  check((await request("/smtp-settings/test", "POST", undefined, activeOwner.cookie)).status === 503, "Missing SMTP credentials never pretend mail was sent");
+  check((await request("/auth/change-email", "POST", { newEmail: emails[5], currentPassword: "incorrect-password" }, activeOwner.cookie)).status === 401, "Owner email change requires the current password");
+  check((await request("/auth/change-email", "POST", { newEmail: emails[1].toUpperCase(), currentPassword: password }, activeOwner.cookie)).status === 409, "Owner cannot take an existing email regardless of case");
+  const newEmail = await request("/auth/change-email", "POST", { newEmail: emails[5], currentPassword: password }, activeOwner.cookie);
+  check(newEmail.status === 200 && newEmail.body.user.id === ids[0] && newEmail.body.user.email === emails[5] && newEmail.body.notification === "not_configured" && !!newEmail.cookie, "Email changes locally without SMTP and preserves identity and role");
+  check((await request("/me", "GET", undefined, activeOwner.cookie)).status === 401, "Email change revokes the former session");
+  check((await request("/me", "GET", undefined, newEmail.cookie)).body.email === emails[5], "Email change rotates the current cookie");
+  check((await login(emails[0])).status === 401 && (await login(emails[5])).status === 200, "New email signs in; the old one does not");
+  const [product] = await db.insert(productsTable).values({ name: "Globo SQLite concurrente", price: 100, cost: 30, stock: 1 }).returning();
+  const cash = await request("/cash-sessions", "POST", { openingAmount: 0 }, newEmail.cookie);
+  check(cash.status === 201, "Cash register opens in SQLite");
+  const saleInput = { discountAmount: 0, items: [{ productId: product.id, quantity: 1 }], payments: [{ method: "cash", amount: 100 }] };
+  const race = await Promise.all(Array.from({ length: 8 }, () => request("/sales", "POST", saleInput, newEmail.cookie)));
+  check(race.filter(r => r.status === 201).length === 1 && race.filter(r => r.status === 400).length === 7, `Concurrent POS sells the last unit once: ${JSON.stringify(race.map(r => ({ status: r.status, error: r.body.error })))}`);
+  const [soldProduct] = await db.select().from(productsTable).where(eq(productsTable.id, product.id));
+  const sold = await db.select().from(salesTable);
+  check(soldProduct.stock === 0 && sold.length === 1 && sold[0].total === 100, "Stock and sale commit together");
+  const [ledger] = await db.select({ delta: sql<number>`SUM(${journalLinesTable.debit} - ${journalLinesTable.credit})` }).from(journalLinesTable);
+  check(Math.abs(ledger.delta) < 0.000001, "Concurrent sale leaves the double-entry ledger balanced");
+  check((await request("/products?search=GLOBO", "GET", undefined, newEmail.cookie)).status === 200, "Case-insensitive catalog search uses valid SQLite SQL");
+  check((await request("/sales?search=F", "GET", undefined, newEmail.cookie)).status === 200, "Receipt search uses valid SQLite SQL");
+  check((await request("/dashboard", "GET", undefined, newEmail.cookie)).status === 200, "Dashboard aggregates work with the local database");
+  const closeCash = await request(`/cash-sessions/${cash.body.id}/close`, "POST", { countedAmount: 100 }, newEmail.cookie);
+  check(closeCash.status === 200 && closeCash.body.expectedAmount === 100 && closeCash.body.difference === 0, "SQLite register closes with the correct expected balance");
   let limited = 0;
   for (let i = 0; i < 11; i++) limited = (await login(emails[4], "not-a-real-password")).status;
   check(limited === 429, "Persistent per-account brute force limit");
@@ -153,5 +185,5 @@ try { await main(); } finally {
   await db.delete(loginAttemptsTable).where(inArray(loginAttemptsTable.key, [
     hash(`ip:${ip}`), ...emails.map(email => hash(`account:${email}`)),
   ]));
-  await pool.end();
+  closeDatabase();
 }

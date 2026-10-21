@@ -932,6 +932,99 @@ export const UpdateTeamRoleResponse = zod.object({
 
 
 /**
+ * @summary Change the signed-in owner's email with password confirmation
+ */
+export const changeOwnerEmailBodyNewEmailMax = 254;
+
+export const changeOwnerEmailBodyCurrentPasswordMax = 128;
+
+
+
+export const ChangeOwnerEmailBody = zod.object({
+  "newEmail": zod.string().email().max(changeOwnerEmailBodyNewEmailMax),
+  "currentPassword": zod.string().min(1).max(changeOwnerEmailBodyCurrentPasswordMax)
+})
+
+export const ChangeOwnerEmailResponse = zod.object({
+  "user": zod.object({
+  "id": zod.string(),
+  "email": zod.string(),
+  "name": zod.string(),
+  "role": zod.enum(['owner', 'manager', 'cashier', 'inventory', 'accountant']),
+  "active": zod.boolean(),
+  "hasLocalLogin": zod.boolean(),
+  "mustChangePassword": zod.boolean()
+}),
+  "notification": zod.enum(['sent', 'not_configured', 'failed']),
+  "message": zod.string()
+})
+
+
+/**
+ * @summary Owner-only Zoho SMTP settings without credentials
+ */
+export const getSmtpSettingsResponseOneHostMin = 5;
+export const getSmtpSettingsResponseOneHostMax = 120;
+
+export const getSmtpSettingsResponseOneFromNameMax = 80;
+
+
+
+export const GetSmtpSettingsResponse = zod.object({
+  "host": zod.string().min(getSmtpSettingsResponseOneHostMin).max(getSmtpSettingsResponseOneHostMax),
+  "port": zod.union([zod.literal(465),zod.literal(587)]),
+  "fromName": zod.string().min(1).max(getSmtpSettingsResponseOneFromNameMax),
+  "enabled": zod.boolean()
+}).and(zod.object({
+  "credentialsConfigured": zod.boolean(),
+  "senderEmail": zod.union([zod.string(),zod.null()])
+}))
+
+
+/**
+ * @summary Configure Zoho host, TLS port and sender name
+ */
+export const updateSmtpSettingsBodyHostMin = 5;
+export const updateSmtpSettingsBodyHostMax = 120;
+
+export const updateSmtpSettingsBodyFromNameMax = 80;
+
+
+
+export const UpdateSmtpSettingsBody = zod.object({
+  "host": zod.string().min(updateSmtpSettingsBodyHostMin).max(updateSmtpSettingsBodyHostMax),
+  "port": zod.union([zod.literal(465),zod.literal(587)]),
+  "fromName": zod.string().min(1).max(updateSmtpSettingsBodyFromNameMax),
+  "enabled": zod.boolean()
+})
+
+export const updateSmtpSettingsResponseOneHostMin = 5;
+export const updateSmtpSettingsResponseOneHostMax = 120;
+
+export const updateSmtpSettingsResponseOneFromNameMax = 80;
+
+
+
+export const UpdateSmtpSettingsResponse = zod.object({
+  "host": zod.string().min(updateSmtpSettingsResponseOneHostMin).max(updateSmtpSettingsResponseOneHostMax),
+  "port": zod.union([zod.literal(465),zod.literal(587)]),
+  "fromName": zod.string().min(1).max(updateSmtpSettingsResponseOneFromNameMax),
+  "enabled": zod.boolean()
+}).and(zod.object({
+  "credentialsConfigured": zod.boolean(),
+  "senderEmail": zod.union([zod.string(),zod.null()])
+}))
+
+
+/**
+ * @summary Send a real SMTP test to the current owner
+ */
+export const SendTestEmailResponse = zod.object({
+  "message": zod.string()
+})
+
+
+/**
  * @summary Get the current local session
  */
 export const GetAuthSessionResponse = zod.object({

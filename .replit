@@ -23,6 +23,8 @@ timeoutMs = 20000
 
 [userenv.shared]
 FESTILAND_OWNER_EMAIL = "admin@fourone.com.do"
+SQLITE_PATH = "/home/runner/workspace/data/festiland.sqlite"
+MIGRATIONS_DIR = "/home/runner/workspace/lib/db/migrations-sqlite"
 
 [nix]
 channel = "stable-25_05"

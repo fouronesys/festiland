@@ -8,7 +8,7 @@ import {
 import { AppError } from "./appError";
 import { hashPassword } from "./passwords";
 
-export type AuthDb = Pick<typeof db, "select" | "insert" | "update" | "delete" | "execute">;
+export type AuthDb = Pick<typeof db, "select" | "insert" | "update" | "delete" | "run">;
 export type LocalMember = typeof teamMembersTable.$inferSelect & {
   hasLocalLogin: boolean; mustChangePassword: boolean; sessionHash?: string;
 };
@@ -78,7 +78,6 @@ export async function bootstrapLocalOwner(): Promise<boolean> {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new AppError(400, "Configura un correo propietario válido.");
   const passwordHash = await hashPassword(password);
   return db.transaction(async tx => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(6802419)`);
     const [alreadyDone] = await tx.select().from(authBootstrapTable).where(eq(authBootstrapTable.id, "owner"));
     if (alreadyDone) return false;
     const members = await tx.select().from(teamMembersTable).where(eq(sql<string>`lower(${teamMembersTable.email})`, normalizeEmail(email)));
@@ -101,7 +100,7 @@ export async function bootstrapLocalOwner(): Promise<boolean> {
   });
 }
 
-/** Shared PostgreSQL counters keep protection effective across restarts and replicas. */
+/** Local persistent counters keep protection effective across restarts. */
 export async function consumeLoginAttempt(req: Request, email: string) {
   const ip = req.ip ?? req.socket.remoteAddress ?? "unknown";
   const buckets = [
@@ -110,7 +109,6 @@ export async function consumeLoginAttempt(req: Request, email: string) {
   ].sort((a, b) => a.key.localeCompare(b.key));
   const allowed = await db.transaction(async tx => {
     for (const bucket of buckets) {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${bucket.key}))`);
       const [current] = await tx.select().from(loginAttemptsTable).where(eq(loginAttemptsTable.key, bucket.key));
       if (current && current.resetAt.getTime() > Date.now() && current.attempts >= bucket.limit) return false;
       const expired = !current || current.resetAt.getTime() <= Date.now();

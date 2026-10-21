@@ -46,7 +46,6 @@ router.patch("/store-settings", requireRole("owner", "manager", "accountant"), a
     throw new AppError(400, "El cierre debe ser una fecha válida, no posterior a hoy.");
   }
   const saved = await db.transaction(async tx => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(6802420)`);
     const current = await settings(tx);
     if (current.lockedThrough && "lockedThrough" in body.data
       && (!date || date < current.lockedThrough) && actor.role !== "owner") {
@@ -68,7 +67,7 @@ async function expectedCash(tx: DbTx, session: typeof cashSessionsTable.$inferSe
   await ensureSystemAccounts(tx);
   const cashId = await systemAccountId(tx, "cash");
   const [movement] = await tx.select({
-    net: sql<number>`COALESCE(SUM(${journalLinesTable.debit} - ${journalLinesTable.credit}), 0)::float`,
+    net: sql<number>`COALESCE(SUM(${journalLinesTable.debit} - ${journalLinesTable.credit}), 0)`,
   }).from(journalLinesTable)
     .innerJoin(journalEntriesTable, eq(journalEntriesTable.id, journalLinesTable.entryId))
     .where(and(
@@ -96,7 +95,6 @@ router.post("/cash-sessions", requireRole("owner", "manager", "cashier"), async 
   }
   const actor = getMember(res);
   const row = await db.transaction(async tx => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(6802420)`);
     const [active] = await tx.select().from(cashSessionsTable)
       .where(and(eq(cashSessionsTable.userId, actor.id), isNull(cashSessionsTable.closedAt)));
     if (active) throw new AppError(409, "Ya tienes una caja abierta. Ciérrala antes de abrir otra.");
@@ -121,10 +119,8 @@ router.post("/cash-sessions/:sessionId/close", requireRole("owner", "manager", "
   }
   const actor = getMember(res);
   const saved = await db.transaction(async tx => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(6802420)`);
     const [session] = await tx.select().from(cashSessionsTable)
-      .where(and(eq(cashSessionsTable.id, params.data.sessionId), eq(cashSessionsTable.userId, actor.id)))
-      .for("update");
+      .where(and(eq(cashSessionsTable.id, params.data.sessionId), eq(cashSessionsTable.userId, actor.id)));
     if (!session) throw new AppError(404, "No encontramos tu caja.");
     if (session.closedAt) throw new AppError(409, "Esta caja ya está cerrada.");
     const expectedAmount = await expectedCash(tx, session);

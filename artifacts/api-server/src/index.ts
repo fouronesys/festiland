@@ -1,8 +1,9 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { bootstrapLocalOwner, hasLocalOwner } from "./lib/localAuth";
-import { pool } from "@workspace/db";
+import { closeDatabase } from "@workspace/db";
 import { AppError } from "./lib/appError";
+import { migrateLocalDatabase } from "@workspace/db/migrate";
 
 const rawPort = process.env["PORT"];
 
@@ -26,12 +27,13 @@ async function start() {
       throw new AppError(400, "APP_ORIGIN debe ser un origen HTTPS, sin rutas ni parámetros.");
     }
   }
+  await migrateLocalDatabase();
   if (await bootstrapLocalOwner()) logger.info("Local owner account initialized");
   if (!await hasLocalOwner()) logger.warn("Local login needs initial owner configuration. Set FESTILAND_OWNER_EMAIL and FESTILAND_INITIAL_OWNER_PASSWORD.");
   const server = app.listen(port, "0.0.0.0", () => logger.info({ port }, "Server listening"));
   for (const signal of ["SIGTERM", "SIGINT"]) {
     process.once(signal, () => {
-      server.close(() => { pool.end().finally(() => process.exit(0)); });
+      server.close(() => { closeDatabase(); process.exit(0); });
       setTimeout(() => process.exit(1), 10000).unref();
     });
   }

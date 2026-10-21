@@ -1,6 +1,6 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { Router, type IRouter } from "express";
-import { ChangePasswordBody, GetAuthSessionResponse, LoginBody } from "@workspace/api-zod";
+import { ChangeOwnerEmailBody, ChangePasswordBody, GetAuthSessionResponse, LoginBody } from "@workspace/api-zod";
 import { auditLogTable, db, localCredentialsTable, localSessionsTable, teamMembersTable } from "@workspace/db";
 import {
   clearAccountAttempts, clearSessionCookie, consumeLoginAttempt, createLocalSession,
@@ -8,7 +8,8 @@ import {
 } from "../lib/localAuth";
 import { hashPassword, verifyPassword } from "../lib/passwords";
 import { AppError } from "../lib/appError";
-import { asTeamUser, getMember, requireMember } from "../middlewares/festilandAuth";
+import { asTeamUser, getMember, requireMember, requireRole } from "../middlewares/festilandAuth";
+import { getSmtpConfiguration, sendLocalEmail } from "../lib/mailer";
 
 const router: IRouter = Router();
 const dummyHash = hashPassword("local-dummy-verification-not-a-login");
@@ -32,7 +33,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   if (!row || !valid || !row.member.active) throw new AppError(401, "Correo o contraseña incorrectos.");
   const rawToken = await db.transaction(async tx => {
     const [current] = await tx.select().from(localCredentialsTable)
-      .where(eq(localCredentialsTable.userId, row.member.id)).for("update");
+      .where(eq(localCredentialsTable.userId, row.member.id));
     if (!current || current.passwordHash !== row.credentials.passwordHash) throw new AppError(401, "Correo o contraseña incorrectos.");
     const oldHash = tokenHash(req);
     if (oldHash) await tx.delete(localSessionsTable).where(eq(localSessionsTable.tokenHash, oldHash));
@@ -52,6 +53,52 @@ router.post("/auth/logout", async (req, res) => {
   if (hash) await db.delete(localSessionsTable).where(eq(localSessionsTable.tokenHash, hash));
   clearSessionCookie(res);
   res.json({ message: "Sesión cerrada." });
+});
+
+router.post("/auth/change-email", requireMember, requireRole("owner"), async (req, res) => {
+  const input = ChangeOwnerEmailBody.safeParse(req.body);
+  if (!input.success) throw new AppError(400, "Indica el correo nuevo y confirma tu contraseña actual.");
+  const member = getMember(res);
+  const email = normalizeEmail(input.data.newEmail);
+  if (email === normalizeEmail(member.email)) throw new AppError(400, "El correo nuevo es igual al actual.");
+  await consumeLoginAttempt(req, member.email);
+  const [credential] = await db.select().from(localCredentialsTable).where(eq(localCredentialsTable.userId, member.id));
+  if (!credential || !await verifyPassword(input.data.currentPassword, credential.passwordHash)) throw new AppError(401, "La contraseña actual no es correcta.");
+  const result = await db.transaction(async tx => {
+    const [ownerNow] = await tx.select().from(teamMembersTable).where(eq(teamMembersTable.id, member.id));
+    if (!ownerNow?.active || ownerNow.role !== "owner") throw new AppError(403, "La cuenta ya no tiene acceso de propietario.");
+    const [current] = await tx.select().from(localCredentialsTable).where(eq(localCredentialsTable.userId, member.id));
+    if (!current || current.passwordHash !== credential.passwordHash || current.email !== normalizeEmail(member.email)) throw new AppError(409, "La cuenta cambió en otra sesión. Inicia sesión de nuevo.");
+    const duplicate = await tx.select({ id: teamMembersTable.id }).from(teamMembersTable)
+      .where(and(eq(sql<string>`lower(${teamMembersTable.email})`, email), ne(teamMembersTable.id, member.id)));
+    if (duplicate.length) throw new AppError(409, "Ese correo ya pertenece a otra cuenta del equipo.");
+    await tx.update(localCredentialsTable).set({ email, updatedAt: new Date() }).where(eq(localCredentialsTable.userId, member.id));
+    const [user] = await tx.update(teamMembersTable).set({ email }).where(eq(teamMembersTable.id, member.id)).returning();
+    await tx.delete(localSessionsTable).where(eq(localSessionsTable.userId, member.id));
+    const token = await createLocalSession(tx, member.id);
+    await tx.insert(auditLogTable).values({
+      actorId: member.id, action: "owner_email_change", entity: "team", entityId: member.id,
+      details: "Correo propietario actualizado; se conservaron identidad y rol y se revocaron las sesiones anteriores",
+    });
+    return { user, token };
+  });
+  setSessionCookie(res, result.token);
+  await clearAccountAttempts(member.email);
+  let notification: "sent" | "not_configured" | "failed" = "not_configured";
+  try {
+    const config = await getSmtpConfiguration();
+    if (config.enabled && config.credentialsConfigured) {
+      await sendLocalEmail({
+        to: email, bcc: member.email, subject: "Festiland · Cambio de correo de tu cuenta",
+        text: "El correo de tu cuenta propietaria de Festiland ha cambiado. El acceso y el historial se conservan. Si no solicitaste este cambio, revisa el acceso al servidor y recupera la cuenta.",
+      });
+      notification = "sent";
+    }
+  } catch { notification = "failed"; }
+  res.json({
+    user: asTeamUser({ ...result.user, hasLocalLogin: true, mustChangePassword: false }), notification,
+    message: "Correo actualizado. A partir de ahora inicia sesión con el nuevo correo y tu misma contraseña.",
+  });
 });
 
 router.post("/auth/change-password", requireMember, async (req, res): Promise<void> => {

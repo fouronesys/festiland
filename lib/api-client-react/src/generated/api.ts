@@ -45,6 +45,8 @@ import type {
   ListSettlementsParams,
   ListSuppliersParams,
   LoginInput,
+  OwnerEmailInput,
+  OwnerEmailResult,
   PasswordChangeInput,
   PasswordResetInput,
   Product,
@@ -57,6 +59,8 @@ import type {
   SaleInput,
   Settlement,
   SettlementInput,
+  SmtpSettings,
+  SmtpSettingsInput,
   StoreSettings,
   StoreSettingsUpdate,
   SuccessMessage,
@@ -3187,6 +3191,333 @@ export const useUpdateTeamRole = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateTeamRoleMutationOptions(options));
+    }
+
+export const getChangeOwnerEmailUrl = () => {
+
+
+
+
+  return `/api/auth/change-email`
+}
+
+/**
+ * @summary Change the signed-in owner's email with password confirmation
+ */
+export const changeOwnerEmail = async (ownerEmailInput: OwnerEmailInput, options?: Parameters<typeof customFetch>[1]): Promise<OwnerEmailResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<OwnerEmailResult>(getChangeOwnerEmailUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(ownerEmailInput)
+  }
+);}
+
+
+
+
+
+export const getChangeOwnerEmailMutationKey = () => ['changeOwnerEmail'] as const;
+
+export const getChangeOwnerEmailMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof changeOwnerEmail>>, TError,ChangeOwnerEmailMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof changeOwnerEmail>>, TError,ChangeOwnerEmailMutationVariables, TContext> => {
+
+const mutationKey = getChangeOwnerEmailMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof changeOwnerEmail>>, ChangeOwnerEmailMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  changeOwnerEmail(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ChangeOwnerEmailMutationResult = NonNullable<Awaited<ReturnType<typeof changeOwnerEmail>>>
+    export type ChangeOwnerEmailMutationBody = BodyType<OwnerEmailInput>
+    export type ChangeOwnerEmailMutationError = ErrorType<unknown>
+    export type ChangeOwnerEmailMutationVariables = {data: BodyType<OwnerEmailInput>}
+
+    /**
+ * @summary Change the signed-in owner's email with password confirmation
+ */
+export const useChangeOwnerEmail = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof changeOwnerEmail>>, TError,ChangeOwnerEmailMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof changeOwnerEmail>>,
+        TError,
+        ChangeOwnerEmailMutationVariables,
+        TContext
+      > => {
+      return useMutation(getChangeOwnerEmailMutationOptions(options));
+    }
+
+export const getGetSmtpSettingsUrl = () => {
+
+
+
+
+  return `/api/smtp-settings`
+}
+
+/**
+ * @summary Owner-only Zoho SMTP settings without credentials
+ */
+export const getSmtpSettings = async ( options?: Parameters<typeof customFetch>[1]): Promise<SmtpSettings> => {
+
+  return customFetch<SmtpSettings>(getGetSmtpSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSmtpSettingsQueryKey = () => {
+    return [
+    `/api/smtp-settings`
+    ] as const;
+    }
+
+
+export const getGetSmtpSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getSmtpSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSmtpSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSmtpSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSmtpSettings>>> = ({ signal }) => getSmtpSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSmtpSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSmtpSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getSmtpSettings>>>
+export type GetSmtpSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Owner-only Zoho SMTP settings without credentials
+ */
+
+export function useGetSmtpSettings<TData = Awaited<ReturnType<typeof getSmtpSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSmtpSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSmtpSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateSmtpSettingsUrl = () => {
+
+
+
+
+  return `/api/smtp-settings`
+}
+
+/**
+ * @summary Configure Zoho host, TLS port and sender name
+ */
+export const updateSmtpSettings = async (smtpSettingsInput: SmtpSettingsInput, options?: Parameters<typeof customFetch>[1]): Promise<SmtpSettings> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<SmtpSettings>(getUpdateSmtpSettingsUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(smtpSettingsInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateSmtpSettingsMutationKey = () => ['updateSmtpSettings'] as const;
+
+export const getUpdateSmtpSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSmtpSettings>>, TError,UpdateSmtpSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateSmtpSettings>>, TError,UpdateSmtpSettingsMutationVariables, TContext> => {
+
+const mutationKey = getUpdateSmtpSettingsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateSmtpSettings>>, UpdateSmtpSettingsMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateSmtpSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateSmtpSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateSmtpSettings>>>
+    export type UpdateSmtpSettingsMutationBody = BodyType<SmtpSettingsInput>
+    export type UpdateSmtpSettingsMutationError = ErrorType<unknown>
+    export type UpdateSmtpSettingsMutationVariables = {data: BodyType<SmtpSettingsInput>}
+
+    /**
+ * @summary Configure Zoho host, TLS port and sender name
+ */
+export const useUpdateSmtpSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSmtpSettings>>, TError,UpdateSmtpSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateSmtpSettings>>,
+        TError,
+        UpdateSmtpSettingsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateSmtpSettingsMutationOptions(options));
+    }
+
+export const getSendTestEmailUrl = () => {
+
+
+
+
+  return `/api/smtp-settings/test`
+}
+
+/**
+ * @summary Send a real SMTP test to the current owner
+ */
+export const sendTestEmail = async ( options?: Parameters<typeof customFetch>[1]): Promise<SuccessMessage> => {
+
+  return customFetch<SuccessMessage>(getSendTestEmailUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getSendTestEmailMutationKey = () => ['sendTestEmail'] as const;
+
+export const getSendTestEmailMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendTestEmail>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendTestEmail>>, TError,void, TContext> => {
+
+const mutationKey = getSendTestEmailMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendTestEmail>>, void> = () => {
+
+
+          return  sendTestEmail(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendTestEmailMutationResult = NonNullable<Awaited<ReturnType<typeof sendTestEmail>>>
+
+    export type SendTestEmailMutationError = ErrorType<unknown>
+
+
+    /**
+ * @summary Send a real SMTP test to the current owner
+ */
+export const useSendTestEmail = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendTestEmail>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendTestEmail>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getSendTestEmailMutationOptions(options));
     }
 
 export const getGetAuthSessionUrl = () => {

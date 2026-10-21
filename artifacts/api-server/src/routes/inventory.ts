@@ -69,7 +69,7 @@ router.post(
         .select()
         .from(productsTable)
         .where(eq(productsTable.id, parsed.data.productId))
-        .limit(1).for("update");
+        .limit(1);
       if (!product) return { error: "No encontramos ese producto." as const };
       if (product.stock + parsed.data.quantityChange < 0) {
         return { error: "El ajuste dejaría la existencia por debajo de cero." as const };
@@ -192,7 +192,7 @@ router.post(
             .select()
             .from(productsTable)
             .where(eq(productsTable.id, item.productId))
-            .limit(1).for("update");
+            .limit(1);
           return product ? { item, product } : null;
         }),
       );

@@ -31,7 +31,6 @@ router.patch("/team/:userId/role", requireRole("owner"), async (req, res): Promi
   const actor = getMember(res);
   if (params.data.userId === actor.id && body.data.active === false) throw new AppError(400, "No puedes desactivar tu propia cuenta.");
   const updated = await db.transaction(async tx => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(6802419)`);
     const [target] = await tx.select().from(teamMembersTable).where(eq(teamMembersTable.id, params.data.userId));
     if (!target) throw new AppError(404, "No encontramos a esa persona del equipo.");
     const [credentials] = await tx.select().from(localCredentialsTable).where(eq(localCredentialsTable.userId, target.id));
@@ -61,7 +60,6 @@ router.post("/team/accounts", requireRole("owner", "manager"), async (req, res):
   const email = normalizeEmail(body.data.email);
   const passwordHash = await hashPassword(body.data.temporaryPassword);
   const member = await db.transaction(async tx => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(6802419)`);
     const [existing] = await tx.select().from(teamMembersTable).where(eq(sql<string>`lower(${teamMembersTable.email})`, email));
     if (existing) throw new AppError(409, "Este correo ya pertenece al equipo. Usa Restablecer contraseña.");
     const [created] = await tx.insert(teamMembersTable).values({
@@ -84,8 +82,7 @@ router.post("/team/:userId/password", requireRole("owner", "manager"), async (re
   if (params.data.userId === actor.id) throw new AppError(400, "Cambia tu propia contraseña desde Preferencias.");
   const passwordHash = await hashPassword(body.data.temporaryPassword);
   await db.transaction(async tx => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(6802419)`);
-    const [target] = await tx.select().from(teamMembersTable).where(eq(teamMembersTable.id, params.data.userId)).for("update");
+    const [target] = await tx.select().from(teamMembersTable).where(eq(teamMembersTable.id, params.data.userId));
     if (!target) throw new AppError(404, "No encontramos ese usuario.");
     if (actor.role !== "owner" && !managerRoles.includes(target.role)) throw new AppError(403, "No puedes restablecer la contraseña de un propietario o gerente.");
     await tx.insert(localCredentialsTable).values({

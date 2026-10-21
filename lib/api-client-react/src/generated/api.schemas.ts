@@ -35,6 +35,59 @@ export interface TeamRoleInput {
   active?: boolean;
 }
 
+export interface OwnerEmailInput {
+  /** @maxLength 254 */
+  newEmail: string;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  currentPassword: string;
+}
+
+export type OwnerEmailResultNotification = typeof OwnerEmailResultNotification[keyof typeof OwnerEmailResultNotification];
+
+
+export const OwnerEmailResultNotification = {
+  sent: 'sent',
+  not_configured: 'not_configured',
+  failed: 'failed',
+} as const;
+
+export interface OwnerEmailResult {
+  user: TeamUser;
+  notification: OwnerEmailResultNotification;
+  message: string;
+}
+
+export type SmtpSettingsInputPort = typeof SmtpSettingsInputPort[keyof typeof SmtpSettingsInputPort];
+
+
+export const SmtpSettingsInputPort = {
+  NUMBER_465: 465,
+  NUMBER_587: 587,
+} as const;
+
+export interface SmtpSettingsInput {
+  /**
+     * @minLength 5
+     * @maxLength 120
+     */
+  host: string;
+  port: SmtpSettingsInputPort;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  fromName: string;
+  enabled: boolean;
+}
+
+export type SmtpSettings = SmtpSettingsInput & ({
+  credentialsConfigured: boolean;
+  senderEmail: string | null;
+});
+
 export interface AuthSession {
   user: TeamUser | null;
   setupRequired: boolean;

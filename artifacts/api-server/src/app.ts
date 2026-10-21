@@ -66,8 +66,13 @@ const handleError: ErrorRequestHandler = (error, req, res, _next) => {
     res.status(error.status).json({ error: error.message });
     return;
   }
-  if (error?.code === "23505" || error?.cause?.code === "23505") {
+  if (["23505", "SQLITE_CONSTRAINT_UNIQUE", "SQLITE_CONSTRAINT_PRIMARYKEY"].includes(error?.code) ||
+      ["23505", "SQLITE_CONSTRAINT_UNIQUE", "SQLITE_CONSTRAINT_PRIMARYKEY"].includes(error?.cause?.code)) {
     res.status(409).json({ error: "Ese código o registro ya existe. Usa uno diferente." });
+    return;
+  }
+  if (error?.code === "SQLITE_BUSY" || error?.cause?.code === "SQLITE_BUSY") {
+    res.status(409).json({ error: "La base local está ocupada. No se guardó la operación; vuelve a intentarlo." });
     return;
   }
   req.log.error(req.path.includes("/auth/") || req.path.includes("/team") ? { errorType: error?.name } : { err: error }, "Request failed");

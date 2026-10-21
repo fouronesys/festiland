@@ -7,7 +7,7 @@ const router: IRouter = Router();
 
 router.get("/healthz", async (_req, res) => {
   try {
-    await db.execute(sql`SELECT 1`);
+    await db.run(sql`SELECT 1`);
     res.json(HealthCheckResponse.parse({ status: "ok" }));
   } catch {
     res.status(503).json({ error: "Base de datos no disponible." });

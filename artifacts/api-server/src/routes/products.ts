@@ -1,4 +1,4 @@
-import { and, eq, ilike, or } from "drizzle-orm";
+import { and, eq, like as ilike, or } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import {
   CreateProductBody,
@@ -127,7 +127,7 @@ router.patch(
     }
     const product = await db.transaction(async tx => {
       const [previous] = await tx.select().from(productsTable)
-        .where(eq(productsTable.id, params.data.productId)).for("update");
+        .where(eq(productsTable.id, params.data.productId));
       if (!previous) return undefined;
       if (parsed.data.productType && parsed.data.productType !== previous.productType && previous.stock !== 0) {
         throw new AppError(400, "No se puede cambiar el tipo de un artículo con existencia.");

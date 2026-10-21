@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, ilike, or } from "drizzle-orm";
+import { and, desc, eq, like as ilike, or } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import {
   CreateSaleBody,
@@ -103,7 +103,7 @@ router.post(
             .select()
             .from(productsTable)
             .where(eq(productsTable.id, item.productId))
-            .limit(1).for("update");
+            .limit(1);
           return product ? { item, product } : null;
         }),
       );
@@ -346,13 +346,13 @@ router.post(
         .select()
         .from(salesTable)
         .where(eq(salesTable.id, params.data.saleId))
-        .limit(1).for("update");
+        .limit(1);
       if (!sale) return { error: "No encontramos esa venta." as const };
       if (sale.status !== "completed") {
         return { error: "Esta venta ya fue devuelta o ajustada." as const };
       }
       if (sale.customerId) {
-        await tx.select().from(contactsTable).where(eq(contactsTable.id, sale.customerId)).for("update");
+        await tx.select().from(contactsTable).where(eq(contactsTable.id, sale.customerId));
         const [credit] = await tx.select().from(salePaymentsTable)
           .where(and(eq(salePaymentsTable.saleId, sale.id), eq(salePaymentsTable.method, "credit"))).limit(1);
         const [collected] = await tx.select().from(settlementsTable)
@@ -370,7 +370,7 @@ router.post(
           .select()
           .from(productsTable)
           .where(eq(productsTable.id, line.productId))
-          .limit(1).for("update");
+          .limit(1);
         if (product && product.productType !== "service") {
           await tx
             .update(productsTable)

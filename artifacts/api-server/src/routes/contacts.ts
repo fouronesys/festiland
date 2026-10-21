@@ -1,4 +1,4 @@
-import { and, eq, ilike, or } from "drizzle-orm";
+import { and, eq, like as ilike, or } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import {
   CreateCustomerBody,

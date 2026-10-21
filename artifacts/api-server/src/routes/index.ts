@@ -11,12 +11,14 @@ import teamRouter from "./team";
 import settlementsRouter from "./settlements";
 import storeRouter from "./store";
 import authRouter from "./auth";
+import smtpRouter from "./smtp";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(authRouter);
 router.use(requireMember);
+router.use(smtpRouter);
 router.use(accountingRouter);
 router.use(contactsRouter);
 router.use(dashboardRouter);

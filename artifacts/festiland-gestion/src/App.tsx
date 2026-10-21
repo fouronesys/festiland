@@ -19,9 +19,9 @@ import {
   useListSettlements, getListSettlementsQueryKey, useCreateSettlement,
 } from '@workspace/api-client-react';
 import {
-  Activity, ArrowDownLeft, ArrowRight, ArrowUpRight, Banknote, BarChart3, Boxes,
-  BriefcaseBusiness, CalendarDays, Check, ClipboardList,
-  FileBarChart, Gift, LayoutDashboard, LogOut, Menu,
+  Activity, ArrowDownLeft, ArrowRight, ArrowUpRight, Banknote, Boxes,
+  BriefcaseBusiness, CalendarDays, ClipboardList,
+  FileBarChart, LayoutDashboard, LogOut, Menu,
   Package, Plus, Printer, Search, Settings, ShieldCheck, ShoppingBag, ShoppingCart,
   Tags, Users, Wallet, X, Download,
 } from 'lucide-react';
@@ -37,6 +37,7 @@ import { ProductEditor, TaxEditor } from '@/features/editors';
 import { useToast } from '@/hooks/use-toast';
 import { AuthProvider, AuthGate, SignInScreen, SignUpNotice, useAuth } from '@/features/local-auth';
 import { TeamPage } from '@/features/team-page';
+import LandingPage from '@/features/landing/LandingPage';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -67,39 +68,6 @@ const fieldSet: Record<string, Field[]> = {
   '/accounting': [{ name: 'code', label: 'Código de cuenta', required: true }, { name: 'name', label: 'Nombre de cuenta', required: true }, { name: 'type', label: 'Tipo', options: ['asset', 'liability', 'equity', 'revenue', 'expense'] }],
   '/purchases': [{ name: 'supplierId', label: 'Proveedor', options: [] }, { name: 'productId', label: 'Producto', options: [] }, { name: 'quantity', label: 'Cantidad', type: 'number', required: true }, { name: 'unitCost', label: 'Costo unitario (DOP)', type: 'number', required: true }, { name: 'paymentMethod', label: 'Pago', options: ['cash', 'card', 'transfer', 'payable'] }, { name: 'note', label: 'Nota' }],
 };
-
-function Home() {
-  return <main className="min-h-[100dvh] bg-[#f8f5ed] text-[#263d40]">
-    <header className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
-      <img src={`${basePath}/brand/festiland-logo.png`} className="h-14 w-14 object-cover rounded-full" alt="Festiland" />
-      <div className="flex gap-3"><Link href="/sign-in" className="rounded-xl bg-[#bd4778] px-4 py-2 text-sm font-bold text-white" data-testid="link-signin">Iniciar sesión</Link></div>
-    </header>
-    <section className="mx-auto grid max-w-7xl items-center gap-12 px-6 pb-16 pt-6 md:grid-cols-[1.02fr_.98fr] md:pb-28">
-      <div className="page-enter">
-        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#d8e4df] bg-white/75 px-4 py-2 text-xs font-bold uppercase tracking-[.16em] text-[#398477]"><Gift size={15}/> La tienda detrás de cada celebración</div>
-        <h1 className="max-w-2xl text-5xl font-bold leading-[1.02] md:text-7xl">Tu tienda, lista para <span className="text-[#bd4778]">celebrar.</span></h1>
-        <p className="mt-6 max-w-xl text-lg leading-8 text-[#657577]">Ventas ágiles, inventario en orden y números claros. Festiland Gestión reúne lo esencial para que cada detalle de tu negocio brille.</p>
-        <div className="mt-8 flex flex-wrap gap-3"><Link href="/sign-in" className="inline-flex items-center gap-3 rounded-xl bg-[#bd4778] px-6 py-4 font-bold text-white shadow-lg shadow-[#bd4778]/20" data-testid="link-get-started">Entrar a mi comercio <ArrowRight size={18}/></Link><a href="#herramientas" className="rounded-xl border border-[#d9d4c8] bg-white px-6 py-4 font-bold">Conoce las herramientas</a></div>
-        <div className="mt-10 flex items-center gap-6 text-sm text-[#647678]"><span className="flex items-center gap-2"><Check size={16} className="text-[#388477]"/> Diseñado para el día a día</span><span>Precios en DOP</span></div>
-      </div>
-      <div className="relative">
-        <div className="absolute -right-4 -top-4 h-32 w-32 rounded-full bg-[#f6d56a] opacity-60 blur-2xl"/>
-        <div className="relative overflow-hidden rounded-[2rem] border-[10px] border-white shadow-2xl shadow-[#415552]/15">
-          <img src={`${basePath}/brand/interior.jpg`} alt="Interior de la tienda Festiland" className="h-[430px] w-full object-cover object-center"/>
-          <div className="absolute inset-x-4 bottom-4 flex items-center justify-between rounded-2xl bg-[#fffdf4]/95 p-4 shadow-lg backdrop-blur"><div><p className="text-xs font-semibold uppercase tracking-wider text-[#7c8987]">Todo bajo control</p><p className="mt-1 font-bold">Caja · Inventario · Compras</p></div><div className="grid h-12 w-12 place-items-center rounded-xl bg-[#f8e5ed] text-[#bd4778]"><BarChart3/></div></div>
-        </div>
-        <div className="absolute -bottom-8 -left-6 hidden w-48 overflow-hidden rounded-2xl border-4 border-white shadow-xl md:block"><img src={`${basePath}/brand/storefront.jpg`} alt="Fachada de Festiland" className="h-36 w-full object-cover"/></div>
-      </div>
-    </section>
-    <section id="herramientas" className="bg-[#214447] px-6 py-16 text-white">
-      <div className="mx-auto max-w-7xl"><p className="text-xs font-bold uppercase tracking-[.22em] text-[#f1d25d]">Un negocio que fluye</p><h2 className="mt-3 max-w-2xl text-4xl font-bold">Menos vueltas en la caja. Más tiempo para lo importante.</h2><div className="mt-10 grid gap-5 md:grid-cols-3"><Feature icon={<ShoppingCart/>} title="Venta sin fricción" body="Busca, escanea y cobra. Un flujo claro para todo el equipo."/><Feature icon={<Boxes/>} title="Existencias al día" body="Movimientos y alertas para saber qué reponer antes de que falte."/><Feature icon={<FileBarChart/>} title="Cuentas claras" body="Compras, gastos e informes financieros en un solo lugar."/></div></div>
-    </section>
-    <footer className="mx-auto flex max-w-7xl flex-col gap-3 px-6 py-8 text-sm text-[#687779] md:flex-row md:justify-between"><span>Festiland Gestión · Santo Domingo, República Dominicana</span><span>Hecho para que cada celebración comience bien.</span></footer>
-  </main>;
-}
-function Feature({ icon, title, body }: { icon: React.ReactNode; title: string; body: string }) {
-  return <article className="rounded-2xl border border-white/10 bg-white/[.06] p-6"><div className="grid h-11 w-11 place-items-center rounded-xl bg-[#f1d25d] text-[#214447]">{icon}</div><h3 className="mt-5 text-xl font-bold">{title}</h3><p className="mt-2 leading-6 text-white/65">{body}</p></article>;
-}
 
 function AppShell({ me }: { me: TeamUser }) {
   const [location] = useLocation();
@@ -497,18 +465,19 @@ function paymentName(value: string) { return ({ cash: 'Efectivo', card: 'Tarjeta
 function typeName(value: string) { return ({ asset: 'Activo', liability: 'Pasivo', equity: 'Patrimonio', revenue: 'Ingreso', expense: 'Gasto' } as any)[value] || value; }
 function subtitle(path: string) { return ({ '/products': 'Un catálogo organizado, listo para la caja', '/sales': 'Recibos y devoluciones', '/inventory': 'Existencias y movimientos', '/customers': 'Personas que celebran contigo', '/suppliers': 'Socios que hacen posible la tienda', '/purchases': 'Abastecimiento y recepción', '/expenses': 'Salidas de caja del comercio', '/taxes': 'Configura las tasas aplicables', '/team': 'Accesos y responsabilidades' } as any)[path] || 'Operación del comercio'; }
 
-function RootRoute() {
-  const { session, loading } = useAuth();
-  if (loading) return <div className="min-h-[100dvh] bg-[#f8f5ed]"/>;
-  return session?.user ? <Redirect to="/dashboard" replace/> : <Home/>;
-}
 function ProtectedShell() {
   return <AuthGate>{user => <AppShell me={user}/>}</AuthGate>;
 }
+/** La raíz pública no depende de la sesión ni de la API; el resto vive dentro de AuthProvider. */
 function AppRoutes() {
+  return <Switch>
+    <Route path="/" component={LandingPage}/>
+    <Route><PrivateRoutes/></Route>
+  </Switch>;
+}
+function PrivateRoutes() {
   return <AuthProvider>
     <Switch>
-      <Route path="/" component={RootRoute}/>
       <Route path="/sign-in/*?" component={SignInScreen}/>
       <Route path="/sign-up/*?" component={SignUpNotice}/>
       {routes.map(route => <Route key={route.path} path={route.path} component={ProtectedShell}/>)}

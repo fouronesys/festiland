@@ -592,6 +592,59 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/TeamUser" }
+  /auth/change-email:
+    post:
+      operationId: changeOwnerEmail
+      tags: [auth]
+      summary: Change the signed-in owner's email with password confirmation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OwnerEmailInput" }
+      responses:
+        "200":
+          description: Email updated and other sessions revoked
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OwnerEmailResult" }
+  /smtp-settings:
+    get:
+      operationId: getSmtpSettings
+      tags: [settings]
+      summary: Owner-only Zoho SMTP settings without credentials
+      responses:
+        "200":
+          description: SMTP configuration and credential readiness
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SmtpSettings" }
+    patch:
+      operationId: updateSmtpSettings
+      tags: [settings]
+      summary: Configure Zoho host, TLS port and sender name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SmtpSettingsInput" }
+      responses:
+        "200":
+          description: Settings saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SmtpSettings" }
+  /smtp-settings/test:
+    post:
+      operationId: sendTestEmail
+      tags: [settings]
+      summary: Send a real SMTP test to the current owner
+      responses:
+        "200":
+          description: SMTP server accepted the test message
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessMessage" }
   /auth/session:
     get:
       operationId: getAuthSession
@@ -710,6 +763,38 @@ components:
         role: { $ref: "#/components/schemas/TeamRole" }
         active: { type: boolean }
       required: [role]
+    OwnerEmailInput:
+      type: object
+      properties:
+        newEmail: { type: string, format: email, maxLength: 254 }
+        currentPassword: { type: string, minLength: 1, maxLength: 128 }
+      required: [newEmail, currentPassword]
+    OwnerEmailResult:
+      type: object
+      properties:
+        user: { $ref: "#/components/schemas/TeamUser" }
+        notification: { type: string, enum: [sent, not_configured, failed] }
+        message: { type: string }
+      required: [user, notification, message]
+    SmtpSettingsInput:
+      type: object
+      properties:
+        host: { type: string, minLength: 5, maxLength: 120 }
+        port: { type: integer, enum: [465, 587] }
+        fromName: { type: string, minLength: 1, maxLength: 80 }
+        enabled: { type: boolean }
+      required: [host, port, fromName, enabled]
+    SmtpSettings:
+      allOf:
+        - { $ref: "#/components/schemas/SmtpSettingsInput" }
+        - type: object
+          properties:
+            credentialsConfigured: { type: boolean }
+            senderEmail:
+              anyOf:
+                - { type: string }
+                - { type: "null" }
+          required: [credentialsConfigured, senderEmail]
     AuthSession:
       type: object
       properties:

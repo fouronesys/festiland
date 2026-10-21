@@ -14,5 +14,10 @@
 attached_assets
 generated-artifacts
 screenshots
+data
+**/*.sqlite
+**/*.sqlite-wal
+**/*.sqlite-shm
+**/*.sqlite-journal
 **/coverage
 *.log

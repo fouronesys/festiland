@@ -2,7 +2,7 @@ import { and, eq, lte, sql } from "drizzle-orm";
 import { db, accountsTable, journalEntriesTable, journalLinesTable, storeSettingsTable, auditLogTable } from "@workspace/db";
 import { AppError } from "./appError";
 
-export type DbTx = Pick<typeof db, "select" | "insert" | "update" | "execute">;
+export type DbTx = Pick<typeof db, "select" | "insert" | "update" | "run">;
 
 const BASE_ACCOUNTS = [
   { code: "1000", name: "Caja", type: "asset", systemKey: "cash" },
@@ -57,7 +57,6 @@ export async function postJournalEntry(
     lines: JournalLineDraft[];
   },
 ) {
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(6802420)`);
   const [settings] = await tx.select().from(storeSettingsTable)
     .where(eq(storeSettingsTable.id, "main"));
   if (settings?.lockedThrough && input.date <= settings.lockedThrough) {
@@ -110,8 +109,8 @@ export async function postJournalEntry(
 export async function getAccountBalance(tx: DbTx, accountId: string, through?: string): Promise<number> {
   const [totals] = await tx
     .select({
-      debit: sql<number>`COALESCE(SUM(${journalLinesTable.debit}), 0)::float`,
-      credit: sql<number>`COALESCE(SUM(${journalLinesTable.credit}), 0)::float`,
+      debit: sql<number>`COALESCE(SUM(${journalLinesTable.debit}), 0)`,
+      credit: sql<number>`COALESCE(SUM(${journalLinesTable.credit}), 0)`,
     })
     .from(journalLinesTable)
     .innerJoin(journalEntriesTable, eq(journalEntriesTable.id, journalLinesTable.entryId))

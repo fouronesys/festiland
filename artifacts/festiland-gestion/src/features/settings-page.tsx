@@ -15,6 +15,7 @@ import { EmptyState, ErrorBlock, LoadingBlock, fieldClass, labelClass } from '@/
 import { can, dateLabel, dateTimeLabel, type Role } from '@/lib/access';
 import { useStoreSettings } from './receipt';
 import { ChangePasswordForm } from './local-auth';
+import { OwnerSettings } from './owner-settings';
 
 type StoreForm = { name: string; taxId: string; address: string; phone: string; receiptFooter: string; receiptPaper: '58mm' | '80mm' | 'A4' };
 
@@ -100,6 +101,8 @@ export function SettingsPage({ role }: { role?: Role }) {
       <p className="mb-4 text-sm text-[#82908f]">Cámbiala cuando quieras. Las contraseñas no se guardan en este navegador.</p>
       <ChangePasswordForm compact/>
     </section>
+
+    <OwnerSettings/>
 
     {can.audit(role) && <AuditLog/>}
   </div>;

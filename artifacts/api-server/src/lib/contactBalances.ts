@@ -22,7 +22,7 @@ export async function contactBalance(
   let charges = contact.openingBalance;
   if (kind === "customer") {
     const [total] = await tx
-      .select({ amount: sql<number>`COALESCE(SUM(${salePaymentsTable.amount}), 0)::float` })
+      .select({ amount: sql<number>`COALESCE(SUM(${salePaymentsTable.amount}), 0)` })
       .from(salePaymentsTable)
       .innerJoin(salesTable, eq(salesTable.id, salePaymentsTable.saleId))
       .where(and(
@@ -33,17 +33,17 @@ export async function contactBalance(
     charges += Number(total.amount);
   } else {
     const [purchases] = await tx
-      .select({ amount: sql<number>`COALESCE(SUM(${purchasesTable.total}), 0)::float` })
+      .select({ amount: sql<number>`COALESCE(SUM(${purchasesTable.total}), 0)` })
       .from(purchasesTable)
       .where(and(eq(purchasesTable.supplierId, contactId), eq(purchasesTable.paymentMethod, "payable")));
     const [expenses] = await tx
-      .select({ amount: sql<number>`COALESCE(SUM(${expensesTable.amount}), 0)::float` })
+      .select({ amount: sql<number>`COALESCE(SUM(${expensesTable.amount}), 0)` })
       .from(expensesTable)
       .where(and(eq(expensesTable.supplierId, contactId), eq(expensesTable.paymentMethod, "payable")));
     charges += Number(purchases.amount) + Number(expenses.amount);
   }
   const [paid] = await tx
-    .select({ amount: sql<number>`COALESCE(SUM(${settlementsTable.amount}), 0)::float` })
+    .select({ amount: sql<number>`COALESCE(SUM(${settlementsTable.amount}), 0)` })
     .from(settlementsTable)
     .where(and(
       eq(settlementsTable.contactId, contactId),

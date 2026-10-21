@@ -1,117 +1,135 @@
-# Festiland en CapRover
+# Festiland en CapRover · SQLite local
 
-La imagen sirve la interfaz y `/api` desde **un mismo dominio**. El acceso usa
-correo y contraseña locales en PostgreSQL, sin Clerk, Google ni servicios de
-autenticación externos. No necesita las claves de Clerk ni `SESSION_SECRET`.
-El navegador sigue comunicándose con el servidor propio del POS.
+Una sola aplicación sirve la web pública, el POS y `/api` bajo el mismo dominio.
+El login, usuarios, sesiones, inventario y contabilidad se guardan en un archivo
+SQLite local. **No requiere PostgreSQL, Clerk, APIs de autenticación ni Turso**.
+El controlador SQLite utiliza únicamente archivos; no configura conexiones remotas.
+El navegador sí se comunica con el servidor propio de Festiland.
 
 ## Preparación
 
-1. Desplegar PostgreSQL en CapRover, con volumen persistente, contraseña segura y
-   copias de seguridad. No publicar su puerto en Internet. Conservar el nombre de
-   red interno que indique CapRover: según la versión puede ser el nombre del
-   servicio o `srv-captain--NOMBRE`.
-2. Crear una aplicación web para Festiland. Usar este repositorio **desde su raíz**;
-   `captain-definition` apunta al `Dockerfile`. No desplegar sólo la carpeta del
-   frontend.
-3. En **HTTP Settings**, poner **Container HTTP Port: 3000**, asignar el dominio,
-   habilitar HTTPS y activar **Enforce HTTPS**. No mapear públicamente el puerto
-   interno de Node.
-4. En **App Config**, configurar estas variables en tiempo de ejecución, nunca
-   como argumentos de construcción ni dentro del repositorio:
+1. Crear una aplicación desde **la raíz del repositorio**. `captain-definition`
+   usa el `Dockerfile`; no desplegar únicamente el frontend.
+2. Activar **Persistent Data** y montar un volumen persistente en **`/data`**.
+   La imagen ejecuta Node como usuario `node` (UID 1000): el volumen debe permitirle
+   leer y escribir. Si se usa una carpeta existente del servidor, ajustar su dueño
+   y permisos antes de arrancar.
+3. Mantener **una sola instancia/réplica**. SQLite y las transacciones asíncronas
+   se coordinan dentro de ese proceso; no montar el archivo en NFS ni compartirlo
+   entre varias instancias. Evitar despliegues con dos procesos escribiendo a la vez.
+4. En HTTP Settings: **Container HTTP Port 3000**, dominio, HTTPS y Enforce HTTPS.
+5. Configurar las variables en tiempo de ejecución, nunca en el código o la imagen:
 
-| Variable | Valor |
+| Variable | Uso |
 | --- | --- |
-| `DATABASE_URL` | URI de la base PostgreSQL propia, usando su nombre de red interno y credenciales. Codificar los caracteres especiales de la contraseña en la URI. |
-| `APP_ORIGIN` | Origen público exacto, por ejemplo `https://pos.ejemplo.com`, sin ruta. Es obligatorio en producción. |
-| `FESTILAND_OWNER_EMAIL` | Correo de la cuenta propietaria indicada por el negocio. |
-| `FESTILAND_INITIAL_OWNER_PASSWORD` | Contraseña inicial **secreta**, de 12 a 128 caracteres. No hay contraseña predeterminada. |
+| `APP_ORIGIN` | Origen público exacto, por ejemplo `https://festiland.ejemplo.com`, sin ruta; obligatorio en producción. |
+| `FESTILAND_OWNER_EMAIL` | Correo inicial del propietario, sólo para una base nueva. |
+| `FESTILAND_INITIAL_OWNER_PASSWORD` | Secreto inicial de 12–128 caracteres; no existe contraseña predeterminada. |
+| `ZOHO_SMTP_USER` | Correo completo de la cuenta remitente Zoho, si se habilita el envío. |
+| `ZOHO_SMTP_PASSWORD` | Contraseña de aplicación Zoho; no incluirla en un archivo del repositorio. |
 
-La imagen ya define `NODE_ENV=production`, `PORT=3000`, `SERVE_STATIC=true`,
-`STATIC_DIR=/app/public` y `MIGRATIONS_DIR=/app/migrations`. No deben sobreescribirse
-salvo que se cambie también la configuración correspondiente.
+La imagen define `SQLITE_PATH=/data/festiland.sqlite`, `MIGRATIONS_DIR=/app/migrations`,
+`STATIC_DIR=/app/public`, `SERVE_STATIC=true`, `NODE_ENV=production` y `PORT=3000`.
+**No configurar `DATABASE_URL`** ni copiar las rutas de desarrollo de Replit.
+La aplicación no utiliza las antiguas claves de Clerk ni `SESSION_SECRET`.
 
-5. Desplegar desde la raíz. Al arrancar se aplican las migraciones SQL y después
-   se inicia la aplicación. Una migración fallida detiene el arranque; no se
-   ejecuta `drizzle-kit push` en producción. Revisar los registros y
-   `/api/healthz`, que comprueba también la conexión a PostgreSQL.
-6. Iniciar sesión con la cuenta propietaria y revisar la configuración del negocio,
-   impuestos, impresoras y saldos. Después del primer arranque correcto, **eliminar
-   `FESTILAND_INITIAL_OWNER_PASSWORD`** de CapRover y volver a desplegar/reiniciar.
-   La cuenta ya está en la base; reiniciar no cambia su contraseña ni sus permisos.
+6. Desplegar. Las migraciones versionadas son automáticas e idempotentes. Si falla
+   el volumen, el esquema o la configuración, el arranque se detiene.
+   `/api/healthz` comprueba que el archivo se puede consultar.
+7. En una instalación nueva: iniciar sesión y eliminar de las variables el secreto
+   `FESTILAND_INITIAL_OWNER_PASSWORD` después de confirmar el primer acceso.
+   Reiniciar no vuelve a asignar contraseña ni permisos.
+8. Confirmar que los datos siguen presentes tras un redespliegue antes de operar.
+   **Sin el volumen `/data`, los datos se perderán al reemplazar el contenedor.**
 
-No hace falta un volumen para Node: los datos, sesiones y usuarios se guardan en
-PostgreSQL. Si en el futuro se añaden archivos subidos, necesitarán almacenamiento
-persistente específico. Guardar copias de seguridad fuera del mismo servidor.
+## Trasladar la instalación actual
 
-## Usuarios y contraseñas
+El reinicio autorizado dejó operaciones, saldos y existencias en cero y conservó
+catálogo, contactos, impuestos, cuentas contables, usuarios, roles y configuración.
+Las sesiones previas se invalidaron; es necesario iniciar sesión de nuevo.
+El PostgreSQL de origen no se borró. Se conservó un respaldo completo privado
+en `data/backups/postgres-before-sqlite-*.json`, excluido de Git y de la imagen.
 
-- No hay registro público ni reclamación de administración desde el navegador.
-- El propietario crea cuentas en **Equipo** y entrega la contraseña temporal por
-  un medio seguro. El usuario debe cambiarla antes de entrar al POS.
-- Los gerentes sólo crean/restablecen cajeros, inventario y contables. Sólo el
-  propietario cambia roles y activa/desactiva cuentas; siempre debe quedar un
-  propietario activo.
-- Las cuentas antiguas conservan su identificador, rol e historial. Las que no
-  tengan acceso local muestran **Sin contraseña**: el propietario usa **Asignar
-  acceso**. Las contraseñas de Clerk no se importan.
-- Cada usuario cambia su contraseña en **Preferencias**. Un restablecimiento, un
-  cambio de contraseña, de rol o de estado revoca las sesiones correspondientes.
-- Las sesiones duran hasta 7 días y vencen tras 12 horas sin actividad. Se guardan
-  sólo hashes de los tokens y contraseñas con scrypt. Las cookies son HttpOnly,
-  SameSite y Secure en producción.
-- El acceso está limitado por correo y dirección IP durante ventanas de 15
-  minutos. Mantener Node detrás del proxy de CapRover; confía en un salto de proxy.
-- El cierre de sesión necesita confirmación del servidor: no basta con cerrar la
-  pestaña, especialmente en un dispositivo compartido.
+Los archivos de desarrollo **no viajan dentro de la imagen**. Para conservar esta
+instalación al moverla a CapRover, hacer un respaldo SQLite coherente y copiarlo al
+volumen como `/data/festiland.sqlite` antes de arrancar la aplicación. No mezclarlo
+con otra base instalada. Mantener su historial `__drizzle_migrations`.
+Si se inicia con un volumen vacío, se crea una instalación nueva y vacía.
 
-## Recuperación del propietario sin servicios externos
+## Respaldos y actualizaciones
 
-Si un propietario activo olvida su contraseña:
+- Respaldar antes de cada actualización y con frecuencia durante la operación.
+  Guardar copias cifradas también fuera del servidor; el volumen no es un respaldo.
+- No copiar sólo el `.sqlite` mientras haya actividad: WAL puede contener cambios
+  confirmados. Usar la API de respaldo de SQLite o `VACUUM INTO`.
+- Desde la consola del contenedor, en `/app`, se puede producir una copia coherente
+  con el controlador que ya viene instalado:
 
-1. Verificar que `FESTILAND_OWNER_EMAIL` corresponde al propietario activo que se
-   recuperará.
-2. Configurar temporalmente `FESTILAND_RECOVERY_PASSWORD` como secreto de entorno
-   del servicio. Usar una contraseña nueva de entre 12 y 128 caracteres.
-3. Abrir la consola del contenedor y ejecutar:
+```sh
+node --input-type=module <<'JS'
+import { createClient } from "@libsql/client/sqlite3";
+import { mkdir } from "node:fs/promises";
+process.umask(0o077);
+await mkdir("/data/backups", { recursive: true, mode: 0o700 });
+const target = `/data/backups/festiland-${Date.now()}.sqlite`;
+const db = createClient({ url: `file:${process.env.SQLITE_PATH}` });
+try {
+  await db.execute({ sql: "VACUUM INTO ?", args: [target] });
+  console.log("Respaldo creado:", target);
+} finally { db.close(); }
+JS
+```
 
-   ```sh
-   node /app/dist/reset-owner.mjs --confirm
-   ```
+Si SQLite informa que está ocupada, repetir cuando no haya una transacción activa.
+Probar la copia con `PRAGMA integrity_check`. Para restaurar, detener la aplicación,
+preservar aparte la base y sus archivos `-wal`/`-shm` actuales y colocar el respaldo
+como archivo principal; no combinarlo con archivos WAL de otra copia.
 
-4. Quitar `FESTILAND_RECOVERY_PASSWORD` de la configuración del servicio y
-   reiniciarlo. Iniciar sesión con la temporal y cambiarla cuando se solicite.
+El esquema nuevo se genera con
+`pnpm --filter @workspace/db exec drizzle-kit generate`, se revisa y se versiona
+en `lib/db/migrations-sqlite`. No usar `push --force` en producción.
+Las migraciones PostgreSQL antiguas sólo se conservan como referencia histórica.
 
-La recuperación revoca las sesiones anteriores y se audita. No crea usuarios, no
-reactiva cuentas y no devuelve permisos revocados. Nunca escribir contraseñas en
-el comando, el historial de la terminal ni los registros.
+## Usuarios y correo propietario
 
-## Datos existentes y actualizaciones
+No hay registro público. El propietario crea cuentas en **Equipo** con contraseña
+temporal; el usuario debe cambiarla antes de operar. Los gerentes no pueden crear
+propietarios ni restablecer sus contraseñas. Siempre debe quedar un propietario activo.
 
-La migración inicial está preparada para una **base nueva**. Los datos del entorno
-de desarrollo no se copian automáticamente. No restaurar tablas a mano y después
-ejecutar la migración inicial encima: daría conflictos.
+El propietario cambia su correo en **Preferencias → Correo del propietario**,
+confirmando la contraseña actual. Se conserva el identificador, rol e historial,
+se revocan las sesiones anteriores y se renueva la actual. Desde ese momento se
+ingresa con el correo nuevo. El correo inicial de las variables **no lo revierte**.
+No es necesario que SMTP funcione para realizar el cambio local.
 
-Para trasladar una base ya poblada, hacer antes una copia completa, probar la
-restauración y acordar un procedimiento de importación/adopción del historial de
-migraciones. No borrar tablas ni usar `push --force` para resolver esos conflictos.
-Una base ya instalada mediante estas migraciones sí puede restaurarse junto con
-su esquema `drizzle` de historial.
+Si se pierde la contraseña: configurar temporalmente `FESTILAND_RECOVERY_PASSWORD`
+y ejecutar `node /app/dist/reset-owner.mjs --confirm`. Por defecto recupera al
+propietario inicial por su identificador estable, aunque haya cambiado su correo.
+`FESTILAND_RECOVERY_EMAIL` permite escoger otro propietario activo explícitamente.
+La recuperación no reactiva usuarios ni devuelve roles revocados. Eliminar después
+el secreto de recuperación; el siguiente acceso exige cambiar esa contraseña.
 
-Antes de cada actualización, hacer respaldo y revisar el SQL nuevo. Las
-migraciones están versionadas en `lib/db/migrations`; un cambio de esquema se
-genera con `pnpm --filter @workspace/db exec drizzle-kit generate`, se revisa y se
-incluye en el repositorio. Probar primero con una copia de la base. Evitar cambios
-incompatibles durante despliegues con varias réplicas o actualizaciones graduales.
+## Zoho SMTP
+
+En **Preferencias → Correo saliente** configurar el servidor exacto que muestra
+Zoho para la cuenta y su región: `smtppro.zoho.com` suele corresponder a cuentas de
+dominio de pago; `smtp.zoho.com`, a otras cuentas. Se permiten **465 con SSL** o
+**587 con STARTTLS obligatorio** y se valida el certificado.
+Las credenciales sólo se leen del entorno. La cuenta debe tener acceso SMTP;
+si tiene 2FA, utilizar una contraseña de aplicación de Zoho.
+
+El correo remitente debe coincidir con la cuenta autenticada. Guardar y usar
+**Enviar prueba**; Zoho debe aceptar el mensaje y después se revisa la bandeja
+del propietario, incluido correo no deseado. Permitir conexiones salientes 465/587
+en el servidor. Un SMTP fallido nunca impide el login local y nunca se presenta
+como un envío exitoso. La web pública usa llamadas e Instagram, no un formulario
+que simule enviar correo.
 
 ## Impresoras
 
-La impresión sigue siendo desde el navegador (58 mm, 80 mm o A4), usando una
-impresora instalada en el equipo. El diálogo y la disponibilidad dependen del
-dispositivo. CapRover no da acceso directo al USB del comercio; la impresión
-silenciosa y el cajón requieren validar el equipo y, si corresponde, un puente
-local adicional.
+Impresión desde el navegador en 58 mm, 80 mm o A4 con una impresora instalada en
+el dispositivo. CapRover no da acceso al USB de la tienda. La impresión silenciosa,
+ESC/POS y la apertura de gaveta requieren integrar y validar el hardware específico.
 
-Referencias:
-- https://caprover.com/docs/captain-definition-file.html
-- https://caprover.com/docs/app-configuration.html
+Referencias: [CapRover](https://caprover.com/docs/app-configuration.html) ·
+[Zoho SMTP](https://www.zoho.com/mail/help/zoho-smtp.html).

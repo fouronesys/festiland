@@ -3,3 +3,9 @@
 
 # No need to store the pnpm store twice.
 .local
+/data/
+**/generated-artifacts/
+**/*.sqlite
+**/*.sqlite-wal
+**/*.sqlite-shm
+**/*.sqlite-journal
