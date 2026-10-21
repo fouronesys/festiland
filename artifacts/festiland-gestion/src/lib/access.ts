@@ -60,8 +60,22 @@ export function downloadCsv(filename: string, rows: (string | number | null | un
 
 export const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 export const money = (value?: number | null) => new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', maximumFractionDigits: 2 }).format(value || 0);
-export const dateLabel = (value?: string | null) => value ? new Intl.DateTimeFormat('es-DO', { dateStyle: 'medium', timeZone: 'America/Santo_Domingo' }).format(new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00.000Z` : value)) : '—';
-export const dateTimeLabel = (value?: string | null) => value ? new Intl.DateTimeFormat('es-DO', { dateStyle: 'short', timeStyle: 'short', hourCycle: 'h12', timeZone: 'America/Santo_Domingo' }).format(new Date(value)) : '—';
+export const dateLabel = (value?: string | Date | null) => {
+  if (!value) return '—';
+  const date = value instanceof Date
+    ? value
+    : new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00.000Z` : value);
+  return Number.isFinite(date.getTime())
+    ? new Intl.DateTimeFormat('es-DO', { dateStyle: 'medium', timeZone: 'America/Santo_Domingo' }).format(date)
+    : '—';
+};
+export const dateTimeLabel = (value?: string | Date | null) => {
+  if (!value) return '—';
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isFinite(date.getTime())
+    ? new Intl.DateTimeFormat('es-DO', { dateStyle: 'short', timeStyle: 'short', hourCycle: 'h12', timeZone: 'America/Santo_Domingo' }).format(date)
+    : '—';
+};
 export const todayDO = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santo_Domingo' }).format(new Date());
 export const pickupTimeLabel = (value?: string | null) => {
   if (!value || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) return 'Sin hora';

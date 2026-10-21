@@ -132,8 +132,16 @@ function AppShell({ me }: { me: TeamUser }) {
         await createAccount.mutateAsync({ data: values } as any);
         await invalidate(getListAccountsQueryKey());
       } else if (activePath === '/purchases') {
-        await createPurchase.mutateAsync({ data: { supplierId: values.supplierId, items: [{ productId: values.productId, quantity: Number(values.quantity), unitCost: Number(values.unitCost) }], paymentMethod: values.paymentMethod || 'cash', note: values.note || null } } as any);
-        await invalidate(getListPurchasesQueryKey(), getListProductsQueryKey(), getListAccountsQueryKey());
+        const purchase = await createPurchase.mutateAsync({ data: { supplierId: values.supplierId, items: [{ productId: values.productId, quantity: Number(values.quantity), unitCost: Number(values.unitCost) }], paymentMethod: values.paymentMethod || 'cash', note: values.note || null } } as any);
+        qc.setQueryData<any[]>(getListPurchasesQueryKey(), current => [
+          purchase,
+          ...(current || []).filter(row => row.id !== purchase.id),
+        ].slice(0, 200));
+        await invalidate(
+          getListPurchasesQueryKey(), getListProductsQueryKey(), getListInventoryAdjustmentsQueryKey(),
+          getListAccountsQueryKey(), getListJournalEntriesQueryKey(), getGetDashboardQueryKey(),
+          getGetFinancialReportQueryKey(),
+        );
       }
       toast({ title: 'Cambios guardados', description: 'La información quedó actualizada.' });
       setModal(false); form.reset();
@@ -371,6 +379,12 @@ function PosPage({ products, productsLoading, customers, taxRates, createSale, i
 }
 
 const sumBal = (rows: any[]) => roundMoney(rows.reduce((n, r) => n + Number(r.balance || 0), 0));
+const reportDateKey = (value: string | Date) => {
+  const raw = value instanceof Date
+    ? Number.isFinite(value.getTime()) ? value.toISOString() : ''
+    : String(value);
+  return /^\d{4}-\d{2}-\d{2}/.exec(raw)?.[0] || '';
+};
 
 function BalanceSheet({ report }: { report: any }) {
   const rows: any[] = report.accountBalances || [];
@@ -380,8 +394,9 @@ function BalanceSheet({ report }: { report: any }) {
   const totalAssets = sumBal(assets), totalLiab = sumBal(liabilities), totalEquity = roundMoney(sumBal(equity) + earnings);
   const totalLE = roundMoney(totalLiab + totalEquity);
   const diff = roundMoney(totalAssets - totalLE);
-  const exportCsv = () => downloadCsv(`balance-general_${report.to}.csv`, [
-    ['Balance general al', report.to], [], ['Sección', 'Código', 'Cuenta', 'Saldo DOP'],
+  const reportTo = reportDateKey(report.to);
+  const exportCsv = () => downloadCsv(`balance-general_${reportTo}.csv`, [
+    ['Balance general al', reportTo], [], ['Sección', 'Código', 'Cuenta', 'Saldo DOP'],
     ...assets.map(a => ['Activos', a.code, a.name, a.balance]), ['Total activos', '', '', totalAssets],
     ...liabilities.map(a => ['Pasivos', a.code, a.name, a.balance]), ['Total pasivos', '', '', totalLiab],
     ...equity.map(a => ['Patrimonio', a.code, a.name, a.balance]), ['Patrimonio', '', 'Resultado acumulado al corte', earnings], ['Total patrimonio', '', '', totalEquity],
@@ -389,7 +404,7 @@ function BalanceSheet({ report }: { report: any }) {
   ]);
   const Section = ({ title, items, extra, total }: any) => <section className="rounded-2xl border border-[#e8e2d6] bg-white p-5"><h3 className="mb-2 text-lg font-bold">{title}</h3>{items.map((a: any) => <div key={a.accountId} className="flex justify-between border-b border-[#f0ede7] py-2 text-sm"><span><span className="text-[#87928f]">{a.code}</span> {a.name}</span><span>{money(a.balance)}</span></div>)}{extra}{!items.length && !extra && <p className="py-2 text-sm text-[#87928f]">Sin cuentas.</p>}<div className="mt-2 flex justify-between pt-2 font-bold"><span>Total</span><span>{money(total)}</span></div></section>;
   return <div data-testid="balance-sheet">
-    <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-[#87928f]">Balance general al {dateLabel(report.to + 'T12:00:00')}</p><Button variant="outline" size="sm" onClick={exportCsv} className="gap-2" data-testid="button-export-balance"><Download size={15}/>Exportar CSV</Button></div>
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-[#87928f]">Balance general al {dateLabel(reportTo)}</p><Button variant="outline" size="sm" onClick={exportCsv} className="gap-2" data-testid="button-export-balance"><Download size={15}/>Exportar CSV</Button></div>
     <div className="grid gap-5 lg:grid-cols-2">
       <Section title="Activos" items={assets} total={totalAssets}/>
       <div className="grid gap-5"><Section title="Pasivos" items={liabilities} total={totalLiab}/><Section title="Patrimonio" items={equity} total={totalEquity} extra={<div className="flex justify-between border-b border-[#f0ede7] py-2 text-sm italic"><span>Resultado acumulado al corte</span><span>{money(earnings)}</span></div>}/></div>
@@ -399,6 +414,7 @@ function BalanceSheet({ report }: { report: any }) {
 }
 
 function TrialBalance({ report }: { report: any }) {
+  const reportTo = reportDateKey(report.to);
   const rows = (report.accountBalances || []).map((a: any) => {
     const debitNormal = a.type === 'asset' || a.type === 'expense';
     const b = Number(a.balance || 0);
@@ -409,13 +425,13 @@ function TrialBalance({ report }: { report: any }) {
   const td = roundMoney(rows.reduce((n: number, r: any) => n + r.debit, 0));
   const tc = roundMoney(rows.reduce((n: number, r: any) => n + r.credit, 0));
   const diff = roundMoney(td - tc);
-  const exportCsv = () => downloadCsv(`balanza-comprobacion_${report.to}.csv`, [
-    ['Balanza de comprobación al', report.to], [], ['Código', 'Cuenta', 'Tipo', 'Débito', 'Crédito'],
+  const exportCsv = () => downloadCsv(`balanza-comprobacion_${reportTo}.csv`, [
+    ['Balanza de comprobación al', reportTo], [], ['Código', 'Cuenta', 'Tipo', 'Débito', 'Crédito'],
     ...rows.map((r: any) => [r.code, r.name, typeName(r.type), r.debit || '', r.credit || '']),
     ['', 'Sumas', '', td, tc], ['', 'Diferencia', '', diff, ''],
   ]);
   return <div className="overflow-x-auto rounded-2xl border border-[#e8e2d6] bg-white p-5" data-testid="trial-balance">
-    <div className="mb-3 flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-[#87928f]">Saldos al {dateLabel(report.to + 'T12:00:00')}</p><Button variant="outline" size="sm" onClick={exportCsv} disabled={!rows.length} className="gap-2" data-testid="button-export-trial"><Download size={15}/>Exportar CSV</Button></div>
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-[#87928f]">Saldos al {dateLabel(reportTo)}</p><Button variant="outline" size="sm" onClick={exportCsv} disabled={!rows.length} className="gap-2" data-testid="button-export-trial"><Download size={15}/>Exportar CSV</Button></div>
     {!rows.length ? <EmptyState title="Sin cuentas" body="Aún no hay saldos para mostrar."/> : <table className="w-full min-w-[600px] text-left text-sm"><thead><tr className="border-b text-xs uppercase text-[#8a9694]"><th className="pb-3">Código</th><th className="pb-3">Cuenta</th><th className="pb-3">Tipo</th><th className="pb-3 text-right">Débito</th><th className="pb-3 text-right">Crédito</th></tr></thead>
       <tbody>{rows.map((r: any) => <tr key={r.accountId} className="border-b border-[#f0ede7]"><td className="py-2.5">{r.code}</td><td className="font-semibold">{r.name}</td><td>{typeName(r.type)}</td><td className="text-right">{r.debit ? money(r.debit) : '—'}</td><td className="text-right">{r.credit ? money(r.credit) : '—'}</td></tr>)}</tbody>
       <tfoot><tr className="font-bold"><td className="pt-3" colSpan={3}>Sumas</td><td className="pt-3 text-right">{money(td)}</td><td className="pt-3 text-right">{money(tc)}</td></tr><tr className={diff === 0 ? 'text-[#2f6f63]' : 'text-[#bd4778]'}><td colSpan={3} className="pt-1 font-bold">Diferencia</td><td colSpan={2} className="pt-1 text-right font-bold" data-testid="text-trial-diff">{diff === 0 ? 'Cuadra' : money(diff)}</td></tr></tfoot></table>}
@@ -427,8 +443,8 @@ function AccountingPage({ role, accounts, journals, report, reportQ, range, setR
   if (loading) return <LoadingBlock/>;
   if (accountsError) return <ErrorBlock retry={retry}/>;
   const badRange = !range.from || !range.to || range.from > range.to;
-  const exportReport = () => downloadCsv(`estado-financiero_${report.from}_${report.to}.csv`, [
-    ['Concepto', 'Monto DOP'], ['Desde', report.from], ['Hasta', report.to],
+  const exportReport = () => downloadCsv(`estado-financiero_${reportDateKey(report.from)}_${reportDateKey(report.to)}.csv`, [
+    ['Concepto', 'Monto DOP'], ['Desde', reportDateKey(report.from)], ['Hasta', reportDateKey(report.to)],
     ['Ingresos', report.revenue], ['Gastos', report.expenses], ['Costo de mercancía', report.costOfGoods], ['Ganancia bruta', report.grossProfit], ['Resultado neto', report.netIncome],
     ['Caja y bancos', report.cashBalance], ['Cuentas por cobrar', report.accountsReceivable], ['Cuentas por pagar', report.accountsPayable],
     [], ['Código', 'Cuenta', 'Tipo', 'Balance'], ...report.accountBalances.map((a: any) => [a.code, a.name, typeName(a.type), a.balance]),
@@ -446,7 +462,7 @@ function AccountingPage({ role, accounts, journals, report, reportQ, range, setR
         {badRange && <p role="alert" className="w-full text-xs font-semibold text-[#bd4778]">La fecha inicial debe ser anterior o igual a la final.</p>}
       </div>
       {reportQ.isLoading ? <LoadingBlock/> : reportQ.isError ? <ErrorBlock retry={reportQ.refetch}/> : report && <>
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[['Ingresos', report.revenue], ['Costo de mercancía', report.costOfGoods], ['Ganancia bruta', report.grossProfit], ['Resultado neto', report.netIncome]].map(([label, amount]: any) => <MiniStat key={label} label={label} value={money(amount)}/>)}</div><div className="grid gap-5 lg:grid-cols-[1fr_1fr]"><section className="rounded-2xl border border-[#e8e2d6] bg-white p-5"><h3 className="text-xl font-bold">Estado de resultados</h3><p className="mb-4 text-sm text-[#87928f]">Del {report.from} al {report.to}</p>{[['Ingresos', report.revenue], ['Gastos', report.expenses], ['Costo de mercancía', report.costOfGoods], ['Ganancia bruta', report.grossProfit], ['Resultado neto', report.netIncome]].map(([label, amount]: any) => <div className="flex justify-between border-b border-[#f0ede7] py-3 text-sm last:border-0" key={label}><span>{label}</span><b>{money(amount)}</b></div>)}</section><section className="rounded-2xl border border-[#e8e2d6] bg-white p-5"><h3 className="text-xl font-bold">Saldos clave</h3>{[['Caja y bancos', report.cashBalance], ['Cuentas por cobrar', report.accountsReceivable], ['Cuentas por pagar', report.accountsPayable]].map(([label, amount]: any) => <div className="flex justify-between border-b border-[#f0ede7] py-4 text-sm last:border-0" key={label}><span>{label}</span><b>{money(amount)}</b></div>)}</section></div>
+       <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[['Ingresos', report.revenue], ['Costo de mercancía', report.costOfGoods], ['Ganancia bruta', report.grossProfit], ['Resultado neto', report.netIncome]].map(([label, amount]: any) => <MiniStat key={label} label={label} value={money(amount)}/>)}</div><div className="grid gap-5 lg:grid-cols-[1fr_1fr]"><section className="rounded-2xl border border-[#e8e2d6] bg-white p-5"><h3 className="text-xl font-bold">Estado de resultados</h3><p className="mb-4 text-sm text-[#87928f]">Del {dateLabel(reportDateKey(report.from))} al {dateLabel(reportDateKey(report.to))}</p>{[['Ingresos', report.revenue], ['Gastos', report.expenses], ['Costo de mercancía', report.costOfGoods], ['Ganancia bruta', report.grossProfit], ['Resultado neto', report.netIncome]].map(([label, amount]: any) => <div className="flex justify-between border-b border-[#f0ede7] py-3 text-sm last:border-0" key={label}><span>{label}</span><b>{money(amount)}</b></div>)}</section><section className="rounded-2xl border border-[#e8e2d6] bg-white p-5"><h3 className="text-xl font-bold">Saldos clave</h3>{[['Caja y bancos', report.cashBalance], ['Cuentas por cobrar', report.accountsReceivable], ['Cuentas por pagar', report.accountsPayable]].map(([label, amount]: any) => <div className="flex justify-between border-b border-[#f0ede7] py-4 text-sm last:border-0" key={label}><span>{label}</span><b>{money(amount)}</b></div>)}</section></div>
       <p className="mt-4 text-xs text-[#87928f]">Informe de gestión interna generado con los registros del sistema. Revísalo con tu contador antes de usarlo para declaraciones fiscales.</p></>}
     </>}
     {(tab === 'balance general' || tab === 'balanza') && <>
