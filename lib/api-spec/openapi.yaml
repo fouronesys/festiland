@@ -3,20 +3,25 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Festiland point of sale, inventory, and accounting API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+  - name: store
+  - name: products
+  - name: sales
+  - name: inventory
+  - name: contacts
+  - name: accounting
+  - name: team
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +29,880 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /me:
+    get:
+      operationId: getMe
+      tags: [store]
+      summary: Get the signed-in team member and effective role
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamUser"
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [store]
+      summary: Sales, stock, and accounting overview
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dashboard"
+  /products:
+    get:
+      operationId: listProducts
+      tags: [products]
+      summary: Search and filter the product catalog
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: category
+          schema: { type: string }
+        - in: query
+          name: lowStock
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Product list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Product" }
+    post:
+      operationId: createProduct
+      tags: [products]
+      summary: Add a product or service
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductInput" }
+      responses:
+        "201":
+          description: Created product
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Product" }
+  /products/{productId}:
+    patch:
+      operationId: updateProduct
+      tags: [products]
+      summary: Update product details
+      parameters:
+        - in: path
+          name: productId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductUpdate" }
+      responses:
+        "200":
+          description: Updated product
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Product" }
+  /sales:
+    get:
+      operationId: listSales
+      tags: [sales]
+      summary: List recent sales and payment status
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string }
+      responses:
+        "200":
+          description: Sales list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Sale" }
+    post:
+      operationId: createSale
+      tags: [sales]
+      summary: Complete a point-of-sale transaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SaleInput" }
+      responses:
+        "201":
+          description: Completed sale with receipt details
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sale" }
+  /sales/{saleId}/refund:
+    post:
+      operationId: refundSale
+      tags: [sales]
+      summary: Refund a sale and restore inventory
+      parameters:
+        - in: path
+          name: saleId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RefundInput" }
+      responses:
+        "200":
+          description: Refunded sale
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sale" }
+  /inventory/adjustments:
+    get:
+      operationId: listInventoryAdjustments
+      tags: [inventory]
+      summary: Inventory movement history
+      responses:
+        "200":
+          description: Adjustment list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/InventoryAdjustment" }
+    post:
+      operationId: createInventoryAdjustment
+      tags: [inventory]
+      summary: Record a stock count, loss, or correction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryAdjustmentInput" }
+      responses:
+        "201":
+          description: Stock adjustment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryAdjustment" }
+  /customers:
+    get:
+      operationId: listCustomers
+      tags: [contacts]
+      summary: List customers
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string }
+      responses:
+        "200":
+          description: Customer list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Contact" }
+    post:
+      operationId: createCustomer
+      tags: [contacts]
+      summary: Create a customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ContactInput" }
+      responses:
+        "201":
+          description: Created customer
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Contact" }
+  /suppliers:
+    get:
+      operationId: listSuppliers
+      tags: [contacts]
+      summary: List suppliers
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string }
+      responses:
+        "200":
+          description: Supplier list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Contact" }
+    post:
+      operationId: createSupplier
+      tags: [contacts]
+      summary: Create a supplier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ContactInput" }
+      responses:
+        "201":
+          description: Created supplier
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Contact" }
+  /tax-rates:
+    get:
+      operationId: listTaxRates
+      tags: [accounting]
+      summary: List configurable taxes without imposing defaults
+      responses:
+        "200":
+          description: Tax rates
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TaxRate" }
+    post:
+      operationId: createTaxRate
+      tags: [accounting]
+      summary: Add a configurable tax rate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaxRateInput" }
+      responses:
+        "201":
+          description: Created tax rate
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxRate" }
+  /tax-rates/{taxRateId}:
+    patch:
+      operationId: updateTaxRate
+      tags: [accounting]
+      summary: Update a tax rate
+      parameters:
+        - in: path
+          name: taxRateId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaxRateUpdate" }
+      responses:
+        "200":
+          description: Updated tax rate
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxRate" }
+  /expenses:
+    get:
+      operationId: listExpenses
+      tags: [accounting]
+      summary: List expenses and payment status
+      responses:
+        "200":
+          description: Expenses
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Expense" }
+    post:
+      operationId: createExpense
+      tags: [accounting]
+      summary: Record an expense and its accounting entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExpenseInput" }
+      responses:
+        "201":
+          description: Recorded expense
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Expense" }
+  /accounts:
+    get:
+      operationId: listAccounts
+      tags: [accounting]
+      summary: Get the chart of accounts
+      responses:
+        "200":
+          description: Accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Account" }
+    post:
+      operationId: createAccount
+      tags: [accounting]
+      summary: Add an account to the chart of accounts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AccountInput" }
+      responses:
+        "201":
+          description: Created account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+  /journal-entries:
+    get:
+      operationId: listJournalEntries
+      tags: [accounting]
+      summary: Browse double-entry accounting entries
+      responses:
+        "200":
+          description: Journal entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/JournalEntry" }
+    post:
+      operationId: createJournalEntry
+      tags: [accounting]
+      summary: Post a balanced manual journal entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JournalEntryInput" }
+      responses:
+        "201":
+          description: Posted entry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JournalEntry" }
+  /purchases:
+    get:
+      operationId: listPurchases
+      tags: [inventory]
+      summary: List supplier purchases
+      responses:
+        "200":
+          description: Purchases
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Purchase" }
+    post:
+      operationId: createPurchase
+      tags: [inventory]
+      summary: Record a supplier purchase and receive stock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PurchaseInput" }
+      responses:
+        "201":
+          description: Recorded purchase
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Purchase" }
+  /settlements:
+    get:
+      operationId: listSettlements
+      tags: [accounting]
+      summary: List customer collections and supplier payments
+      parameters:
+        - in: query
+          name: direction
+          schema: { type: string, enum: [receivable, payable] }
+      responses:
+        "200":
+          description: Balance settlements
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Settlement" }
+    post:
+      operationId: createSettlement
+      tags: [accounting]
+      summary: Collect a customer balance or pay a supplier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SettlementInput" }
+      responses:
+        "201":
+          description: Recorded settlement
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Settlement" }
+  /reports/financial:
+    get:
+      operationId: getFinancialReport
+      tags: [accounting]
+      summary: Income statement, cash, and receivable/payable totals
+      parameters:
+        - in: query
+          name: from
+          required: true
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Financial report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FinancialReport" }
+  /team:
+    get:
+      operationId: listTeam
+      tags: [team]
+      summary: List staff and application roles
+      responses:
+        "200":
+          description: Team
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TeamUser" }
+  /team/{userId}/role:
+    patch:
+      operationId: updateTeamRole
+      tags: [team]
+      summary: Change a team member's application role
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TeamRoleInput" }
+      responses:
+        "200":
+          description: Updated staff member
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TeamUser" }
+  /team/invitations:
+    post:
+      operationId: inviteTeamMember
+      tags: [team]
+      summary: Invite a staff member by email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TeamInviteInput" }
+      responses:
+        "201":
+          description: Invitation sent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TeamInvite" }
 components:
   schemas:
     HealthStatus:
       type: object
       properties:
-        status:
-          type: string
-      required:
-        - status
-
+        status: { type: string }
+      required: [status]
+    TeamRole:
+      type: string
+      enum: [owner, manager, cashier, inventory, accountant]
+    TeamUser:
+      type: object
+      properties:
+        id: { type: string }
+        email: { type: string }
+        name: { type: string }
+        role: { $ref: "#/components/schemas/TeamRole" }
+        active: { type: boolean }
+      required: [id, email, name, role, active]
+    TeamRoleInput:
+      type: object
+      properties:
+        role: { $ref: "#/components/schemas/TeamRole" }
+        active: { type: boolean }
+      required: [role]
+    TeamInviteInput:
+      type: object
+      properties:
+        email: { type: string, format: email }
+        role: { $ref: "#/components/schemas/TeamRole" }
+      required: [email, role]
+    TeamInvite:
+      type: object
+      properties:
+        email: { type: string }
+        role: { $ref: "#/components/schemas/TeamRole" }
+        status: { type: string }
+      required: [email, role, status]
+    Dashboard:
+      type: object
+      properties:
+        todaySales: { type: number }
+        todayTransactions: { type: integer }
+        lowStockCount: { type: integer }
+        cashBalance: { type: number }
+        accountsReceivable: { type: number }
+        accountsPayable: { type: number }
+        recentSales:
+          type: array
+          items: { $ref: "#/components/schemas/Sale" }
+        topProducts:
+          type: array
+          items: { $ref: "#/components/schemas/TopProduct" }
+      required: [todaySales, todayTransactions, lowStockCount, cashBalance, accountsReceivable, accountsPayable, recentSales, topProducts]
+    TopProduct:
+      type: object
+      properties:
+        productId: { type: string }
+        name: { type: string }
+        quantity: { type: number }
+        revenue: { type: number }
+      required: [productId, name, quantity, revenue]
+    Product:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        sku: { type: ["string", "null"] }
+        barcode: { type: ["string", "null"] }
+        category: { type: string }
+        price: { type: number }
+        cost: { type: number }
+        stock: { type: number }
+        minStock: { type: number }
+        unit: { type: string }
+        productType: { type: string, enum: [product, service] }
+        taxRateId: { type: ["string", "null"], format: uuid }
+        active: { type: boolean }
+      required: [id, name, category, price, cost, stock, minStock, unit, productType, active]
+    ProductInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        sku: { type: ["string", "null"] }
+        barcode: { type: ["string", "null"] }
+        category: { type: string }
+        price: { type: number, minimum: 0 }
+        cost: { type: number, minimum: 0 }
+        stock: { type: number, minimum: 0 }
+        minStock: { type: number, minimum: 0 }
+        unit: { type: string }
+        productType: { type: string, enum: [product, service] }
+        taxRateId: { type: ["string", "null"], format: uuid }
+      required: [name, category, price, cost, stock, minStock, unit, productType]
+    ProductUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        sku: { type: ["string", "null"] }
+        barcode: { type: ["string", "null"] }
+        category: { type: string }
+        price: { type: number, minimum: 0 }
+        cost: { type: number, minimum: 0 }
+        minStock: { type: number, minimum: 0 }
+        unit: { type: string }
+        productType: { type: string, enum: [product, service] }
+        taxRateId: { type: ["string", "null"], format: uuid }
+        active: { type: boolean }
+    SaleLineInput:
+      type: object
+      properties:
+        productId: { type: string, format: uuid }
+        quantity: { type: number, exclusiveMinimum: 0 }
+      required: [productId, quantity]
+    PaymentInput:
+      type: object
+      properties:
+        method: { type: string, enum: [cash, card, transfer, credit] }
+        amount: { type: number, exclusiveMinimum: 0 }
+      required: [method, amount]
+    SaleInput:
+      type: object
+      properties:
+        customerId: { type: ["string", "null"], format: uuid }
+        items:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/SaleLineInput" }
+        discountAmount: { type: number, minimum: 0 }
+        payments:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/PaymentInput" }
+        note: { type: ["string", "null"] }
+      required: [items, discountAmount, payments]
+    SaleLine:
+      type: object
+      properties:
+        productId: { type: string }
+        name: { type: string }
+        quantity: { type: number }
+        unitPrice: { type: number }
+        lineTotal: { type: number }
+        taxAmount: { type: number }
+      required: [productId, name, quantity, unitPrice, lineTotal, taxAmount]
+    Sale:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        receiptNumber: { type: string }
+        customerName: { type: ["string", "null"] }
+        status: { type: string, enum: [completed, refunded, partial] }
+        subtotal: { type: number }
+        discountAmount: { type: number }
+        taxAmount: { type: number }
+        total: { type: number }
+        paymentSummary: { type: string }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SaleLine" }
+        createdAt: { type: string, format: date-time }
+      required: [id, receiptNumber, status, subtotal, discountAmount, taxAmount, total, paymentSummary, items, createdAt]
+    RefundInput:
+      type: object
+      properties:
+        reason: { type: string, minLength: 1 }
+      required: [reason]
+    InventoryAdjustmentInput:
+      type: object
+      properties:
+        productId: { type: string, format: uuid }
+        quantityChange: { type: number }
+        reason: { type: string, enum: [count, damage, loss, correction, return] }
+        note: { type: ["string", "null"] }
+      required: [productId, quantityChange, reason]
+    InventoryAdjustment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        productId: { type: string }
+        productName: { type: string }
+        quantityChange: { type: number }
+        reason: { type: string }
+        note: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+      required: [id, productId, productName, quantityChange, reason, createdAt]
+    ContactInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        email: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        taxId: { type: ["string", "null"] }
+        address: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+      required: [name]
+    Contact:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        taxId: { type: ["string", "null"] }
+        address: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+        balance: { type: number }
+      required: [id, name, balance]
+    TaxRateInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        rate: { type: number, minimum: 0, maximum: 100 }
+        inclusive: { type: boolean }
+        active: { type: boolean }
+      required: [name, rate, inclusive]
+    TaxRateUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        rate: { type: number, minimum: 0, maximum: 100 }
+        inclusive: { type: boolean }
+        active: { type: boolean }
+    TaxRate:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        rate: { type: number }
+        inclusive: { type: boolean }
+        active: { type: boolean }
+      required: [id, name, rate, inclusive, active]
+    ExpenseInput:
+      type: object
+      properties:
+        description: { type: string, minLength: 1 }
+        accountId: { type: string, format: uuid }
+        amount: { type: number, exclusiveMinimum: 0 }
+        paymentMethod: { type: string, enum: [cash, card, transfer, payable] }
+        supplierId: { type: ["string", "null"], format: uuid }
+        dueDate: { type: ["string", "null"], format: date }
+        note: { type: ["string", "null"] }
+      required: [description, accountId, amount, paymentMethod]
+    Expense:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        description: { type: string }
+        accountId: { type: string }
+        amount: { type: number }
+        paymentMethod: { type: string }
+        supplierName: { type: ["string", "null"] }
+        status: { type: string, enum: [paid, unpaid] }
+        createdAt: { type: string, format: date-time }
+      required: [id, description, accountId, amount, paymentMethod, status, createdAt]
+    AccountInput:
+      type: object
+      properties:
+        code: { type: string, minLength: 1 }
+        name: { type: string, minLength: 1 }
+        type: { type: string, enum: [asset, liability, equity, revenue, expense] }
+      required: [code, name, type]
+    Account:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        type: { type: string, enum: [asset, liability, equity, revenue, expense] }
+        balance: { type: number }
+        active: { type: boolean }
+      required: [id, code, name, type, balance, active]
+    JournalLineInput:
+      type: object
+      properties:
+        accountId: { type: string, format: uuid }
+        debit: { type: number, minimum: 0 }
+        credit: { type: number, minimum: 0 }
+        memo: { type: ["string", "null"] }
+      required: [accountId, debit, credit]
+    JournalEntryInput:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        description: { type: string, minLength: 1 }
+        lines:
+          type: array
+          minItems: 2
+          items: { $ref: "#/components/schemas/JournalLineInput" }
+      required: [date, description, lines]
+    JournalLine:
+      type: object
+      properties:
+        accountId: { type: string }
+        accountName: { type: string }
+        debit: { type: number }
+        credit: { type: number }
+        memo: { type: ["string", "null"] }
+      required: [accountId, accountName, debit, credit]
+    JournalEntry:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        date: { type: string, format: date }
+        description: { type: string }
+        source: { type: string }
+        total: { type: number }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/JournalLine" }
+      required: [id, date, description, source, total, lines]
+    PurchaseLineInput:
+      type: object
+      properties:
+        productId: { type: string, format: uuid }
+        quantity: { type: number, exclusiveMinimum: 0 }
+        unitCost: { type: number, minimum: 0 }
+      required: [productId, quantity, unitCost]
+    PurchaseInput:
+      type: object
+      properties:
+        supplierId: { type: string, format: uuid }
+        items:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/PurchaseLineInput" }
+        paymentMethod: { type: string, enum: [cash, card, transfer, payable] }
+        dueDate: { type: ["string", "null"], format: date }
+        note: { type: ["string", "null"] }
+      required: [supplierId, items, paymentMethod]
+    Purchase:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        supplierName: { type: string }
+        total: { type: number }
+        status: { type: string, enum: [paid, unpaid] }
+        itemCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+      required: [id, supplierName, total, status, itemCount, createdAt]
+    SettlementInput:
+      type: object
+      properties:
+        direction: { type: string, enum: [receivable, payable] }
+        contactId: { type: string, format: uuid }
+        amount: { type: number, exclusiveMinimum: 0 }
+        paymentMethod: { type: string, enum: [cash, card, transfer] }
+        note: { type: ["string", "null"] }
+      required: [direction, contactId, amount, paymentMethod]
+    Settlement:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        direction: { type: string, enum: [receivable, payable] }
+        contactId: { type: string, format: uuid }
+        contactName: { type: string }
+        amount: { type: number }
+        paymentMethod: { type: string }
+        note: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+      required: [id, direction, contactId, contactName, amount, paymentMethod, createdAt]
+    FinancialReport:
+      type: object
+      properties:
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        revenue: { type: number }
+        expenses: { type: number }
+        costOfGoods: { type: number }
+        grossProfit: { type: number }
+        netIncome: { type: number }
+        cashBalance: { type: number }
+        accountsReceivable: { type: number }
+        accountsPayable: { type: number }
+        accountBalances:
+          type: array
+          items:
+            type: object
+            properties:
+              accountId: { type: string }
+              code: { type: string }
+              name: { type: string }
+              type: { type: string }
+              balance: { type: number }
+            required: [accountId, code, name, type, balance]
+      required: [from, to, revenue, expenses, costOfGoods, grossProfit, netIncome, cashBalance, accountsReceivable, accountsPayable, accountBalances]

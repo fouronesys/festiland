@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Festiland · Punto de venta y gestión"
+description = "Sistema adaptable para Festiland, tienda dominicana de regalos y artículos de fiesta. Incluye POS rápido, inventario, compras, clientes, usuarios por rol, impuestos configurables, impresión de recibos y contabilidad de partida doble en DOP; sin integración de facturación electrónica."
+version = "1.0.0"
+id = "artifacts/festiland-gestion"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25231
+
+[services.development]
+run = "pnpm --filter @workspace/festiland-gestion run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/festiland-gestion", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/festiland-gestion/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25231"
+BASE_PATH = "/"
