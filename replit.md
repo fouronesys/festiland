@@ -1,6 +1,6 @@
-# [Project name]
+# Festiland · Punto de venta y gestión
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Sistema de operación para una tienda de regalos y celebraciones en República Dominicana: POS, inventario y contabilidad de partida doble.
 
 ## Run & Operate
 
@@ -14,7 +14,7 @@ _Replace the heading above with the project's name, and this line with one sente
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
+- API: Express 5; interfaz React + Vite; autenticación Clerk
 - DB: PostgreSQL + Drizzle ORM
 - Validation: Zod (`zod/v4`), `drizzle-zod`
 - API codegen: Orval (from OpenAPI spec)
@@ -22,23 +22,33 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/festiland-gestion` — interfaz y recursos de marca del negocio.
+- `artifacts/api-server` — API, permisos y transacciones contables.
+- `lib/api-spec/openapi.yaml` — contrato; regenerar clientes y validadores con codegen.
+- `lib/db/src/schema/festiland.ts` — esquema del negocio.
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- No conceder administración al primer registro público. El propietario se autoriza por un correo verificado configurado en `FESTILAND_OWNER_EMAIL`; el equipo entra por invitación. Aplicar la misma configuración en desarrollo y producción.
+- Los cambios de inventario, ventas, devoluciones y asientos se guardan en una sola transacción para evitar estados parciales.
+- Valuación por costo promedio móvil, con precisión adicional en el costo unitario. No sustituirlo por el precio de la última compra sin revisar el libro de inventario.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Moneda DOP; zona horaria America/Santo_Domingo; interfaz en español, adaptable a móvil, tablet y PC.
+- El usuario no necesita integración de facturación electrónica. Los impuestos se configuran y asignan expresamente; no suponer una tasa fiscal activa ni certificar cumplimiento DGII.
+- Impresión mediante el navegador en 58 mm, 80 mm y A4. No prometer ESC/POS directo, apertura de gaveta o Bluetooth sin integrar y validar el hardware concreto.
+- Catálogo e inventario real: no precargar existencias, precios o transacciones de ejemplo como datos operativos.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+El usuario aprobó iniciar con contabilidad de partida doble: diario, mayor, cuentas por cobrar/pagar, caja/banco, gastos, ajustes e informes.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Después de cambiar el contrato, ejecutar codegen; los clientes y validadores son generados.
+- Validación contable sin conservar datos: compilar `scripts/verify-accounting.ts` desde el paquete API con esbuild y ejecutarlo; todos sus registros de prueba se revierten.
+- Antes de operar: autorizar el correo propietario, cargar los datos reales del comercio y revisar impuestos, saldos iniciales e impresión con el contador y el hardware del negocio.
 
 ## Pointers
 

@@ -2,6 +2,7 @@ import { clerkClient, getAuth } from "@clerk/express";
 import type { RequestHandler } from "express";
 import { eq, sql } from "drizzle-orm";
 import { db, teamMembersTable } from "@workspace/db";
+import { AppError } from "../lib/appError";
 
 export type AppRole =
   | "owner"
@@ -15,9 +16,10 @@ type TeamMember = typeof teamMembersTable.$inferSelect;
 async function provisionMember(userId: string): Promise<TeamMember | null> {
   const client = clerkClient;
   const identity = await client.users.getUser(userId);
-  const email =
+  const primaryEmail =
     identity.emailAddresses.find((item) => item.id === identity.primaryEmailAddressId)
-      ?.emailAddress ?? identity.emailAddresses[0]?.emailAddress;
+      ?? identity.emailAddresses[0];
+  const email = primaryEmail?.emailAddress;
 
   if (!email) {
     throw new Error("La cuenta no tiene un correo disponible.");
@@ -35,6 +37,13 @@ async function provisionMember(userId: string): Promise<TeamMember | null> {
     "inventory",
     "accountant",
   ];
+  const ownerEmail = process.env.FESTILAND_OWNER_EMAIL?.trim().toLowerCase();
+  const isConfiguredOwner = !!ownerEmail && email.toLowerCase() === ownerEmail;
+  const invited = identity.publicMetadata.festilandAccess === "staff"
+    && allowedRoles.includes(invitedRole as AppRole);
+  if ((!isConfiguredOwner && !invited) || primaryEmail?.verification?.status !== "verified") {
+    throw new AppError(403, "Acceso pendiente. El propietario debe autorizar tu correo o enviarte una invitación.");
+  }
 
   await db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(6802419)`);
@@ -52,17 +61,11 @@ async function provisionMember(userId: string): Promise<TeamMember | null> {
       return;
     }
 
-    const members = await tx.select({ id: teamMembersTable.id }).from(teamMembersTable).limit(1);
     await tx.insert(teamMembersTable).values({
       id: userId,
       email,
       name,
-      role:
-        members.length === 0
-          ? "owner"
-          : allowedRoles.includes(invitedRole as AppRole)
-            ? (invitedRole as AppRole)
-            : "cashier",
+      role: isConfiguredOwner ? "owner" : (invitedRole as AppRole),
       active: true,
     });
   });

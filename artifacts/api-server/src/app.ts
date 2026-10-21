@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type Express, type ErrorRequestHandler } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import { clerkMiddleware } from "@clerk/express";
@@ -10,6 +10,7 @@ import {
 } from "./middlewares/clerkProxyMiddleware";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { AppError } from "./lib/appError";
 
 const app: Express = express();
 
@@ -46,5 +47,23 @@ app.use(
 );
 
 app.use("/api", router);
+
+const handleError: ErrorRequestHandler = (error, req, res, _next) => {
+  if (res.headersSent) {
+    _next(error);
+    return;
+  }
+  if (error instanceof AppError) {
+    res.status(error.status).json({ error: error.message });
+    return;
+  }
+  if (error?.code === "23505") {
+    res.status(409).json({ error: "Ese código o registro ya existe. Usa uno diferente." });
+    return;
+  }
+  req.log.error({ err: error }, "Request failed");
+  res.status(500).json({ error: "No pudimos completar la operación. No se guardaron cambios parciales." });
+};
+app.use(handleError);
 
 export default app;

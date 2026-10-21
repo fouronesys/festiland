@@ -12,6 +12,7 @@ import {
 } from "@workspace/api-zod";
 import {
   contactsTable,
+  settlementsTable,
   db,
   journalEntriesTable,
   journalLinesTable,
@@ -24,6 +25,7 @@ import {
 } from "@workspace/db";
 import { getMember, requireRole } from "../middlewares/festilandAuth";
 import { ensureSystemAccounts, postJournalEntry, systemAccountId } from "../lib/accounting";
+import { calculateSaleLine } from "../lib/saleMath";
 
 const router: IRouter = Router();
 const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -96,12 +98,12 @@ router.post(
     }
     const result = await db.transaction(async (tx) => {
       const productRows = await Promise.all(
-        parsed.data.items.map(async (item) => {
+        [...parsed.data.items].sort((a, b) => a.productId.localeCompare(b.productId)).map(async (item) => {
           const [product] = await tx
             .select()
             .from(productsTable)
             .where(eq(productsTable.id, item.productId))
-            .limit(1);
+            .limit(1).for("update");
           return product ? { item, product } : null;
         }),
       );
@@ -112,6 +114,7 @@ router.post(
         (row): row is NonNullable<typeof row> => row !== null,
       );
       for (const { item, product } of rows) {
+        if (!product.active) return { error: `${product.name} está desactivado.` as const };
         if (
           product.productType !== "service" &&
           item.quantity > product.stock
@@ -128,10 +131,11 @@ router.post(
             await tx
               .select({ name: contactsTable.name })
               .from(contactsTable)
-              .where(eq(contactsTable.id, customerId))
+              .where(and(eq(contactsTable.id, customerId), eq(contactsTable.kind, "customer")))
               .limit(1)
           )[0]?.name ?? null
         : null;
+      if (customerId && !customerName) return { error: "Selecciona un cliente válido." as const };
 
       const subtotal = roundMoney(
         rows.reduce((sum, row) => sum + row.product.price * row.item.quantity, 0),
@@ -160,24 +164,13 @@ router.post(
         }),
       );
       const computedLines = taxableLines.map(({ item, product, rate }) => {
-        const base = product.price * item.quantity;
-        const allocatedDiscount =
-          subtotal > 0 ? (parsed.data.discountAmount * base) / subtotal : 0;
-        const discountedBase = Math.max(0, base - allocatedDiscount);
-        const taxAmount = rate
-          ? rate.inclusive
-            ? discountedBase * (rate.rate / (100 + rate.rate))
-            : discountedBase * (rate.rate / 100)
-          : 0;
-        const total = rate?.inclusive
-          ? discountedBase
-          : discountedBase + taxAmount;
         return {
           product,
           item,
-          base,
-          taxAmount: roundMoney(taxAmount),
-          lineTotal: roundMoney(total),
+          ...calculateSaleLine({
+            price: product.price, quantity: item.quantity, subtotal,
+            discount: parsed.data.discountAmount, rate: rate?.rate, inclusive: rate?.inclusive,
+          }),
         };
       });
       const taxAmount = roundMoney(
@@ -186,7 +179,7 @@ router.post(
       const total = roundMoney(
         computedLines.reduce((sum, line) => sum + line.lineTotal, 0),
       );
-      if (Math.abs(paymentsTotal - total) > 0.01) {
+      if (total <= 0 || Math.round(paymentsTotal * 100) !== Math.round(total * 100)) {
         return {
           error: "Los pagos deben sumar exactamente el total de la venta." as const,
         };
@@ -242,6 +235,10 @@ router.post(
               updatedAt: new Date(),
             })
             .where(eq(productsTable.id, line.product.id));
+          await tx.insert(inventoryAdjustmentsTable).values({
+            productId: line.product.id, quantityChange: -line.item.quantity,
+            reason: "sale", note: `Venta ${receiptNumber}`, createdBy: member.id,
+          });
           costOfGoods += line.product.cost * line.item.quantity;
         }
       }
@@ -349,25 +346,39 @@ router.post(
         .select()
         .from(salesTable)
         .where(eq(salesTable.id, params.data.saleId))
-        .limit(1);
+        .limit(1).for("update");
       if (!sale) return { error: "No encontramos esa venta." as const };
       if (sale.status !== "completed") {
         return { error: "Esta venta ya fue devuelta o ajustada." as const };
       }
+      if (sale.customerId) {
+        await tx.select().from(contactsTable).where(eq(contactsTable.id, sale.customerId)).for("update");
+        const [credit] = await tx.select().from(salePaymentsTable)
+          .where(and(eq(salePaymentsTable.saleId, sale.id), eq(salePaymentsTable.method, "credit"))).limit(1);
+        const [collected] = await tx.select().from(settlementsTable)
+          .where(and(eq(settlementsTable.contactId, sale.customerId), eq(settlementsTable.direction, "receivable"))).limit(1);
+        if (credit && collected) {
+          return { error: "Esta venta a crédito pertenece a un cliente con cobros registrados. El contable debe conciliar el reembolso antes de devolverla; no se modificó la venta." as const };
+        }
+      }
       const lines = await tx
         .select()
         .from(saleLinesTable)
-        .where(eq(saleLinesTable.saleId, sale.id));
+        .where(eq(saleLinesTable.saleId, sale.id)).orderBy(saleLinesTable.productId);
       for (const line of lines) {
         const [product] = await tx
           .select()
           .from(productsTable)
           .where(eq(productsTable.id, line.productId))
-          .limit(1);
+          .limit(1).for("update");
         if (product && product.productType !== "service") {
           await tx
             .update(productsTable)
-            .set({ stock: product.stock + line.quantity, updatedAt: new Date() })
+            .set({
+              stock: product.stock + line.quantity,
+              cost: Math.round(((product.stock * product.cost + line.quantity * line.unitCost) / (product.stock + line.quantity)) * 1e6) / 1e6,
+              updatedAt: new Date(),
+            })
             .where(eq(productsTable.id, product.id));
           await tx.insert(inventoryAdjustmentsTable).values({
             productId: product.id,

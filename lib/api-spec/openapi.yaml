@@ -418,6 +418,94 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Purchase" }
+  /store-settings:
+    get:
+      operationId: getStoreSettings
+      tags: [store]
+      summary: Get shared business and receipt settings
+      responses:
+        "200":
+          description: Business settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StoreSettings" }
+    patch:
+      operationId: updateStoreSettings
+      tags: [store]
+      summary: Save shared business settings and accounting period lock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StoreSettingsUpdate" }
+      responses:
+        "200":
+          description: Saved settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StoreSettings" }
+  /cash-sessions:
+    get:
+      operationId: listCashSessions
+      tags: [sales]
+      summary: List the cashier's cash sessions
+      responses:
+        "200":
+          description: Cash sessions with expected balances
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CashSession" }
+    post:
+      operationId: openCashSession
+      tags: [sales]
+      summary: Open a cash session using a physical opening count
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CashSessionInput" }
+      responses:
+        "201":
+          description: Opened cash session
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CashSession" }
+  /cash-sessions/{sessionId}/close:
+    post:
+      operationId: closeCashSession
+      tags: [sales]
+      summary: Close a cash session and store the cash count difference
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CashSessionCloseInput" }
+      responses:
+        "200":
+          description: Closed cash session
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CashSession" }
+  /audit-log:
+    get:
+      operationId: listAuditLog
+      tags: [store]
+      summary: Browse recent audit events
+      responses:
+        "200":
+          description: Audit events
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AuditEvent" }
   /settlements:
     get:
       operationId: listSettlements
@@ -881,6 +969,60 @@ components:
         note: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
       required: [id, direction, contactId, contactName, amount, paymentMethod, createdAt]
+    StoreSettings:
+      type: object
+      properties:
+        name: { type: string }
+        taxId: { type: ["string", "null"] }
+        address: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        receiptFooter: { type: string }
+        receiptPaper: { type: string, enum: [58mm, 80mm, A4] }
+        lockedThrough: { type: ["string", "null"], pattern: '^\d{4}-\d{2}-\d{2}$' }
+      required: [name, taxId, address, phone, receiptFooter, receiptPaper, lockedThrough]
+    StoreSettingsUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        taxId: { type: ["string", "null"] }
+        address: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        receiptFooter: { type: string }
+        receiptPaper: { type: string, enum: [58mm, 80mm, A4] }
+        lockedThrough: { type: ["string", "null"], pattern: '^\d{4}-\d{2}-\d{2}$' }
+    CashSessionInput:
+      type: object
+      properties:
+        openingAmount: { type: number, minimum: 0 }
+      required: [openingAmount]
+    CashSessionCloseInput:
+      type: object
+      properties:
+        countedAmount: { type: number, minimum: 0 }
+        note: { type: ["string", "null"] }
+      required: [countedAmount]
+    CashSession:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        openedAt: { type: string, format: date-time }
+        closedAt: { type: ["string", "null"], format: date-time }
+        openingAmount: { type: number }
+        expectedAmount: { type: number }
+        countedAmount: { type: ["number", "null"] }
+        difference: { type: ["number", "null"] }
+        note: { type: ["string", "null"] }
+      required: [id, openedAt, closedAt, openingAmount, expectedAmount, countedAmount, difference, note]
+    AuditEvent:
+      type: object
+      properties:
+        id: { type: string }
+        actorName: { type: string }
+        action: { type: string }
+        entity: { type: string }
+        details: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+      required: [id, actorName, action, entity, details, createdAt]
     FinancialReport:
       type: object
       properties:

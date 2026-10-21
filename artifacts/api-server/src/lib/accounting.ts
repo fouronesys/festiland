@@ -1,7 +1,8 @@
-import { eq, sql } from "drizzle-orm";
-import { db, accountsTable, journalEntriesTable, journalLinesTable } from "@workspace/db";
+import { and, eq, lte, sql } from "drizzle-orm";
+import { db, accountsTable, journalEntriesTable, journalLinesTable, storeSettingsTable, auditLogTable } from "@workspace/db";
+import { AppError } from "./appError";
 
-type DbTx = any;
+export type DbTx = Pick<typeof db, "select" | "insert" | "update" | "execute">;
 
 const BASE_ACCOUNTS = [
   { code: "1000", name: "Caja", type: "asset", systemKey: "cash" },
@@ -56,14 +57,24 @@ export async function postJournalEntry(
     lines: JournalLineDraft[];
   },
 ) {
-  const debitTotal = input.lines.reduce((sum, line) => sum + line.debit, 0);
-  const creditTotal = input.lines.reduce((sum, line) => sum + line.credit, 0);
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(6802420)`);
+  const [settings] = await tx.select().from(storeSettingsTable)
+    .where(eq(storeSettingsTable.id, "main"));
+  if (settings?.lockedThrough && input.date <= settings.lockedThrough) {
+    throw new AppError(409, `El período está bloqueado hasta ${settings.lockedThrough}. No se modificó la operación.`);
+  }
+  const lines = input.lines.map(line => ({
+    ...line, debit: Math.round(line.debit * 100) / 100, credit: Math.round(line.credit * 100) / 100,
+  }));
+  const debitTotal = lines.reduce((sum, line) => sum + line.debit, 0);
+  const creditTotal = lines.reduce((sum, line) => sum + line.credit, 0);
   if (
-    input.lines.length < 2 ||
+    lines.length < 2 ||
     Math.round(debitTotal * 100) !== Math.round(creditTotal * 100) ||
-    debitTotal <= 0
+    debitTotal <= 0 ||
+    lines.some(line => !Number.isFinite(line.debit) || !Number.isFinite(line.credit) || line.debit < 0 || line.credit < 0 || (line.debit > 0 && line.credit > 0))
   ) {
-    throw new Error("El asiento debe tener al menos dos líneas y estar balanceado.");
+    throw new AppError(400, "El asiento debe tener al menos dos líneas válidas y estar balanceado.");
   }
 
   const [entry] = await tx
@@ -74,10 +85,11 @@ export async function postJournalEntry(
       source: input.source,
       sourceId: input.sourceId,
       createdBy: input.createdBy,
+      createdAt: new Date(),
     })
     .returning();
   await tx.insert(journalLinesTable).values(
-    input.lines.map((line) => ({
+    lines.map((line) => ({
       entryId: entry.id,
       accountId: line.accountId,
       debit: line.debit,
@@ -85,17 +97,28 @@ export async function postJournalEntry(
       memo: line.memo ?? null,
     })),
   );
+  await tx.insert(auditLogTable).values({
+    actorId: input.createdBy,
+    action: "post",
+    entity: "journal",
+    entityId: entry.id,
+    details: `${input.source} · ${debitTotal.toFixed(2)} DOP`,
+  });
   return entry;
 }
 
-export async function getAccountBalance(tx: DbTx, accountId: string): Promise<number> {
+export async function getAccountBalance(tx: DbTx, accountId: string, through?: string): Promise<number> {
   const [totals] = await tx
     .select({
       debit: sql<number>`COALESCE(SUM(${journalLinesTable.debit}), 0)::float`,
       credit: sql<number>`COALESCE(SUM(${journalLinesTable.credit}), 0)::float`,
     })
     .from(journalLinesTable)
-    .where(eq(journalLinesTable.accountId, accountId));
+    .innerJoin(journalEntriesTable, eq(journalEntriesTable.id, journalLinesTable.entryId))
+    .where(and(
+      eq(journalLinesTable.accountId, accountId),
+      through ? lte(journalEntriesTable.entryDate, through) : undefined,
+    ));
   const [account] = await tx
     .select({ type: accountsTable.type })
     .from(accountsTable)

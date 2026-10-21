@@ -1,5 +1,5 @@
 import { clerkClient } from "@clerk/express";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import {
   InviteTeamMemberBody,
@@ -9,8 +9,9 @@ import {
   UpdateTeamRoleParams,
   UpdateTeamRoleResponse,
 } from "@workspace/api-zod";
-import { db, teamMembersTable } from "@workspace/db";
+import { db, teamMembersTable, auditLogTable } from "@workspace/db";
 import { asTeamUser, getMember, requireRole } from "../middlewares/festilandAuth";
+import { AppError } from "../lib/appError";
 
 const router: IRouter = Router();
 
@@ -50,25 +51,25 @@ router.patch(
       res.status(400).json({ error: "No puedes desactivar tu propia cuenta." });
       return;
     }
-    if (body.data.role !== "owner") {
-      const [target] = await db
+    const updated = await db.transaction(async tx => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(6802419)`);
+      const [target] = await tx
         .select()
         .from(teamMembersTable)
         .where(eq(teamMembersTable.id, params.data.userId))
         .limit(1);
-      if (target?.role === "owner" && target.active) {
-        const otherOwners = await db
+      if (target?.role === "owner" && target.active &&
+        (body.data.role !== "owner" || body.data.active === false)) {
+        const otherOwners = await tx
           .select({ id: teamMembersTable.id })
           .from(teamMembersTable)
-          .where(eq(teamMembersTable.role, "owner"));
-        if (otherOwners.length <= 1 && target.id === actor.id) {
-          res.status(400).json({ error: "Debe quedar al menos un usuario con rol propietario." });
-          return;
+          .where(and(eq(teamMembersTable.role, "owner"), eq(teamMembersTable.active, true)));
+        if (otherOwners.length <= 1) {
+          throw new AppError(400, "Debe quedar al menos un usuario activo con rol propietario.");
         }
       }
-    }
 
-    const [updated] = await db
+    const [row] = await tx
       .update(teamMembersTable)
       .set({
         role: body.data.role,
@@ -76,6 +77,12 @@ router.patch(
       })
       .where(eq(teamMembersTable.id, params.data.userId))
       .returning();
+    if (row) await tx.insert(auditLogTable).values({
+      actorId: actor.id, action: "change_role", entity: "team", entityId: row.id,
+      details: `${row.role} · ${row.active ? "activo" : "inactivo"}`,
+    });
+    return row;
+    });
     if (!updated) {
       res.status(404).json({ error: "No encontramos a esa persona del equipo." });
       return;
@@ -101,7 +108,7 @@ router.post(
     const client = clerkClient;
     await client.invitations.createInvitation({
       emailAddress: parsed.data.email,
-      publicMetadata: { role: parsed.data.role },
+      publicMetadata: { role: parsed.data.role, festilandAccess: "staff" },
     });
     res.status(201).json(
       InviteTeamMemberResponse.parse({

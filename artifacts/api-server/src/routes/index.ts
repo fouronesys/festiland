@@ -8,6 +8,8 @@ import inventoryRouter from "./inventory";
 import productsRouter from "./products";
 import salesRouter from "./sales";
 import teamRouter from "./team";
+import settlementsRouter from "./settlements";
+import storeRouter from "./store";
 
 const router: IRouter = Router();
 
@@ -20,5 +22,7 @@ router.use(inventoryRouter);
 router.use(productsRouter);
 router.use(salesRouter);
 router.use(teamRouter);
+router.use(settlementsRouter);
+router.use(storeRouter);
 
 export default router;

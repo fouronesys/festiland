@@ -10,6 +10,7 @@ import {
 import { GetDashboardResponse } from "@workspace/api-zod";
 import { ensureSystemAccounts, getAccountBalance } from "../lib/accounting";
 import { saleWithLines } from "./sales";
+import { requireRole } from "../middlewares/festilandAuth";
 
 const router: IRouter = Router();
 
@@ -19,7 +20,7 @@ function localDate() {
   }).format(new Date());
 }
 
-router.get("/dashboard", async (_req, res): Promise<void> => {
+router.get("/dashboard", requireRole("owner", "manager", "accountant"), async (_req, res): Promise<void> => {
   const today = localDate();
   const startOfDay = new Date(`${today}T00:00:00-04:00`);
   const startOfTomorrow = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);

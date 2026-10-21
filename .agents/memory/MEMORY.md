@@ -1,0 +1,1 @@
+- [Versiones compartidas de React](shared-react-versions.md) — mantener React y React DOM alineados en el catálogo del workspace, también cuando una integración exige actualizar.

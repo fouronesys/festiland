@@ -12,6 +12,7 @@ import {
 } from "@workspace/api-zod";
 import { contactsTable, db } from "@workspace/db";
 import { requireRole } from "../middlewares/festilandAuth";
+import { contactBalance } from "../lib/contactBalances";
 
 const router: IRouter = Router();
 
@@ -32,10 +33,10 @@ async function listContacts(kind: "customer" | "supplier", search?: string) {
     .from(contactsTable)
     .where(and(...filters))
     .orderBy(contactsTable.name);
-  return contacts.map((contact) => ({
+  return Promise.all(contacts.map(async (contact) => ({
     ...contact,
-    balance: contact.openingBalance,
-  }));
+    balance: await contactBalance(db, contact.id, kind),
+  })));
 }
 
 router.get("/customers", async (req, res): Promise<void> => {
@@ -66,7 +67,7 @@ router.post(
   },
 );
 
-router.get("/suppliers", async (req, res): Promise<void> => {
+router.get("/suppliers", requireRole("owner", "manager", "inventory", "accountant"), async (req, res): Promise<void> => {
   const query = ListSuppliersQueryParams.safeParse(req.query);
   if (!query.success) {
     res.status(400).json({ error: query.error.message });

@@ -480,6 +480,143 @@ export interface Purchase {
   createdAt: string;
 }
 
+export type SettlementInputDirection = typeof SettlementInputDirection[keyof typeof SettlementInputDirection];
+
+
+export const SettlementInputDirection = {
+  receivable: 'receivable',
+  payable: 'payable',
+} as const;
+
+export type SettlementInputPaymentMethod = typeof SettlementInputPaymentMethod[keyof typeof SettlementInputPaymentMethod];
+
+
+export const SettlementInputPaymentMethod = {
+  cash: 'cash',
+  card: 'card',
+  transfer: 'transfer',
+} as const;
+
+export interface SettlementInput {
+  direction: SettlementInputDirection;
+  contactId: string;
+  /** @exclusiveMinimum 0 */
+  amount: number;
+  paymentMethod: SettlementInputPaymentMethod;
+  /** @nullable */
+  note?: string | null;
+}
+
+export type SettlementDirection = typeof SettlementDirection[keyof typeof SettlementDirection];
+
+
+export const SettlementDirection = {
+  receivable: 'receivable',
+  payable: 'payable',
+} as const;
+
+export interface Settlement {
+  id: string;
+  direction: SettlementDirection;
+  contactId: string;
+  contactName: string;
+  amount: number;
+  paymentMethod: string;
+  /** @nullable */
+  note?: string | null;
+  createdAt: string;
+}
+
+export type StoreSettingsReceiptPaper = typeof StoreSettingsReceiptPaper[keyof typeof StoreSettingsReceiptPaper];
+
+
+export const StoreSettingsReceiptPaper = {
+  '58mm': '58mm',
+  '80mm': '80mm',
+  A4: 'A4',
+} as const;
+
+export interface StoreSettings {
+  name: string;
+  /** @nullable */
+  taxId: string | null;
+  /** @nullable */
+  address: string | null;
+  /** @nullable */
+  phone: string | null;
+  receiptFooter: string;
+  receiptPaper: StoreSettingsReceiptPaper;
+  /**
+     * @nullable
+     * @pattern ^\d{4}-\d{2}-\d{2}$
+     */
+  lockedThrough: string | null;
+}
+
+export type StoreSettingsUpdateReceiptPaper = typeof StoreSettingsUpdateReceiptPaper[keyof typeof StoreSettingsUpdateReceiptPaper];
+
+
+export const StoreSettingsUpdateReceiptPaper = {
+  '58mm': '58mm',
+  '80mm': '80mm',
+  A4: 'A4',
+} as const;
+
+export interface StoreSettingsUpdate {
+  /** @minLength 1 */
+  name?: string;
+  /** @nullable */
+  taxId?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  receiptFooter?: string;
+  receiptPaper?: StoreSettingsUpdateReceiptPaper;
+  /**
+     * @nullable
+     * @pattern ^\d{4}-\d{2}-\d{2}$
+     */
+  lockedThrough?: string | null;
+}
+
+export interface CashSessionInput {
+  /** @minimum 0 */
+  openingAmount: number;
+}
+
+export interface CashSessionCloseInput {
+  /** @minimum 0 */
+  countedAmount: number;
+  /** @nullable */
+  note?: string | null;
+}
+
+export interface CashSession {
+  id: string;
+  openedAt: string;
+  /** @nullable */
+  closedAt: string | null;
+  openingAmount: number;
+  expectedAmount: number;
+  /** @nullable */
+  countedAmount: number | null;
+  /** @nullable */
+  difference: number | null;
+  /** @nullable */
+  note: string | null;
+}
+
+export interface AuditEvent {
+  id: string;
+  actorName: string;
+  action: string;
+  entity: string;
+  /** @nullable */
+  details: string | null;
+  createdAt: string;
+}
+
 export type FinancialReportAccountBalancesItem = {
   accountId: string;
   code: string;
@@ -519,6 +656,18 @@ search?: string;
 export type ListSuppliersParams = {
 search?: string;
 };
+
+export type ListSettlementsParams = {
+direction?: ListSettlementsDirection;
+};
+
+export type ListSettlementsDirection = typeof ListSettlementsDirection[keyof typeof ListSettlementsDirection];
+
+
+export const ListSettlementsDirection = {
+  receivable: 'receivable',
+  payable: 'payable',
+} as const;
 
 export type GetFinancialReportParams = {
 from: string;

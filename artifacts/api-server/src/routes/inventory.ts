@@ -32,7 +32,7 @@ function localDate() {
   }).format(new Date());
 }
 
-router.get("/inventory/adjustments", async (_req, res): Promise<void> => {
+router.get("/inventory/adjustments", requireRole("owner", "manager", "inventory", "accountant"), async (_req, res): Promise<void> => {
   const rows = await db
     .select({
       id: inventoryAdjustmentsTable.id,
@@ -69,7 +69,7 @@ router.post(
         .select()
         .from(productsTable)
         .where(eq(productsTable.id, parsed.data.productId))
-        .limit(1);
+        .limit(1).for("update");
       if (!product) return { error: "No encontramos ese producto." as const };
       if (product.stock + parsed.data.quantityChange < 0) {
         return { error: "El ajuste dejaría la existencia por debajo de cero." as const };
@@ -169,6 +169,10 @@ router.post(
       return;
     }
     const member = getMember(res);
+    if (new Set(parsed.data.items.map(item => item.productId)).size !== parsed.data.items.length) {
+      res.status(400).json({ error: "Agrega cada producto una sola vez." });
+      return;
+    }
     const result = await db.transaction(async (tx) => {
       const [supplier] = await tx
         .select()
@@ -183,12 +187,12 @@ router.post(
       if (!supplier) return { error: "Selecciona un proveedor válido." as const };
 
       const products = await Promise.all(
-        parsed.data.items.map(async (item) => {
+        [...parsed.data.items].sort((a, b) => a.productId.localeCompare(b.productId)).map(async (item) => {
           const [product] = await tx
             .select()
             .from(productsTable)
             .where(eq(productsTable.id, item.productId))
-            .limit(1);
+            .limit(1).for("update");
           return product ? { item, product } : null;
         }),
       );
@@ -198,10 +202,14 @@ router.post(
       const validProducts = products.filter(
         (entry): entry is NonNullable<typeof entry> => entry !== null,
       );
-      const total = validProducts.reduce(
-        (sum, entry) => sum + entry.item.quantity * entry.item.unitCost,
+      if (validProducts.some(row => row.product.productType === "service")) {
+        return { error: "Las compras de inventario sólo admiten productos físicos. Registra los servicios como gastos." as const };
+      }
+      const total = Math.round(validProducts.reduce(
+        (sum, entry) => sum + Math.round(entry.item.quantity * entry.item.unitCost * 100) / 100,
         0,
-      );
+      ) * 100) / 100;
+      if (total <= 0) return { error: "La compra debe tener un costo mayor que cero." as const };
       const [purchase] = await tx
         .insert(purchasesTable)
         .values({
@@ -228,7 +236,7 @@ router.post(
           .update(productsTable)
           .set({
             stock: product.stock + item.quantity,
-            cost: item.unitCost,
+            cost: Math.round(((product.stock * product.cost + item.quantity * item.unitCost) / (product.stock + item.quantity)) * 1e6) / 1e6,
             updatedAt: new Date(),
           })
           .where(eq(productsTable.id, product.id));

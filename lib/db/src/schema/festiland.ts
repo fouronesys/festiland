@@ -8,6 +8,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 const money = (name: string) =>
   numeric(name, { precision: 14, scale: 2, mode: "number" });
@@ -41,7 +42,7 @@ export const productsTable = pgTable(
     barcode: text("barcode"),
     category: text("category").notNull().default("General"),
     price: money("price").notNull().default(0),
-    cost: money("cost").notNull().default(0),
+    cost: numeric("cost", { precision: 18, scale: 6, mode: "number" }).notNull().default(0),
     stock: quantity("stock").notNull().default(0),
     minStock: quantity("min_stock").notNull().default(0),
     unit: text("unit").notNull().default("unidad"),
@@ -105,7 +106,7 @@ export const saleLinesTable = pgTable("festiland_sale_lines", {
   name: text("name").notNull(),
   quantity: quantity("quantity").notNull(),
   unitPrice: money("unit_price").notNull(),
-  unitCost: money("unit_cost").notNull(),
+  unitCost: numeric("unit_cost", { precision: 18, scale: 6, mode: "number" }).notNull(),
   lineTotal: money("line_total").notNull(),
   taxAmount: money("tax_amount").notNull().default(0),
 });
@@ -210,6 +211,42 @@ export const purchaseLinesTable = pgTable("festiland_purchase_lines", {
   unitCost: money("unit_cost").notNull(),
   lineTotal: money("line_total").notNull(),
 });
+
+export const settlementsTable = pgTable("festiland_settlements", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  direction: text("direction").notNull(),
+  contactId: uuid("contact_id").notNull(),
+  amount: money("amount").notNull(),
+  paymentMethod: text("payment_method").notNull(),
+  note: text("note"),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const storeSettingsTable = pgTable("festiland_store_settings", {
+  id: text("id").primaryKey().default("main"),
+  name: text("name").notNull().default("Festiland"),
+  taxId: text("tax_id"),
+  address: text("address"),
+  phone: text("phone"),
+  receiptFooter: text("receipt_footer").notNull().default("Gracias por celebrar con Festiland"),
+  receiptPaper: text("receipt_paper").notNull().default("80mm"),
+  lockedThrough: text("locked_through"),
+});
+
+export const cashSessionsTable = pgTable("festiland_cash_sessions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id").notNull(),
+  openedAt: timestamp("opened_at", { withTimezone: true }).notNull().defaultNow(),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
+  openingAmount: money("opening_amount").notNull(),
+  expectedAmount: money("expected_amount"),
+  countedAmount: money("counted_amount"),
+  difference: money("difference"),
+  note: text("note"),
+}, (table) => [
+  uniqueIndex("festiland_one_open_cash_session").on(table.userId).where(sql`${table.closedAt} IS NULL`),
+]);
 
 export const auditLogTable = pgTable(
   "festiland_audit_log",

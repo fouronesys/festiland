@@ -687,11 +687,187 @@ export const CreatePurchaseResponse = zod.object({
 
 
 /**
+ * @summary Get shared business and receipt settings
+ */
+export const getStoreSettingsResponseLockedThroughRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const GetStoreSettingsResponse = zod.object({
+  "name": zod.string(),
+  "taxId": zod.string().nullable(),
+  "address": zod.string().nullable(),
+  "phone": zod.string().nullable(),
+  "receiptFooter": zod.string(),
+  "receiptPaper": zod.enum(['58mm', '80mm', 'A4']),
+  "lockedThrough": zod.string().regex(getStoreSettingsResponseLockedThroughRegExp).nullable()
+})
+
+
+/**
+ * @summary Save shared business settings and accounting period lock
+ */
+
+export const updateStoreSettingsBodyLockedThroughRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const UpdateStoreSettingsBody = zod.object({
+  "name": zod.string().min(1).optional(),
+  "taxId": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "receiptFooter": zod.string().optional(),
+  "receiptPaper": zod.enum(['58mm', '80mm', 'A4']).optional(),
+  "lockedThrough": zod.string().regex(updateStoreSettingsBodyLockedThroughRegExp).nullish()
+})
+
+export const updateStoreSettingsResponseLockedThroughRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const UpdateStoreSettingsResponse = zod.object({
+  "name": zod.string(),
+  "taxId": zod.string().nullable(),
+  "address": zod.string().nullable(),
+  "phone": zod.string().nullable(),
+  "receiptFooter": zod.string(),
+  "receiptPaper": zod.enum(['58mm', '80mm', 'A4']),
+  "lockedThrough": zod.string().regex(updateStoreSettingsResponseLockedThroughRegExp).nullable()
+})
+
+
+/**
+ * @summary List the cashier's cash sessions
+ */
+export const ListCashSessionsResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "openedAt": zod.coerce.date(),
+  "closedAt": zod.coerce.date().nullable(),
+  "openingAmount": zod.number(),
+  "expectedAmount": zod.number(),
+  "countedAmount": zod.number().nullable(),
+  "difference": zod.number().nullable(),
+  "note": zod.string().nullable()
+})
+export const ListCashSessionsResponse = zod.array(ListCashSessionsResponseItem)
+
+
+/**
+ * @summary Open a cash session using a physical opening count
+ */
+export const openCashSessionBodyOpeningAmountMin = 0;
+
+
+
+export const OpenCashSessionBody = zod.object({
+  "openingAmount": zod.number().min(openCashSessionBodyOpeningAmountMin)
+})
+
+export const OpenCashSessionResponse = zod.object({
+  "id": zod.string().uuid(),
+  "openedAt": zod.coerce.date(),
+  "closedAt": zod.coerce.date().nullable(),
+  "openingAmount": zod.number(),
+  "expectedAmount": zod.number(),
+  "countedAmount": zod.number().nullable(),
+  "difference": zod.number().nullable(),
+  "note": zod.string().nullable()
+})
+
+
+/**
+ * @summary Close a cash session and store the cash count difference
+ */
+export const CloseCashSessionParams = zod.object({
+  "sessionId": zod.coerce.string().uuid()
+})
+
+export const closeCashSessionBodyCountedAmountMin = 0;
+
+
+
+export const CloseCashSessionBody = zod.object({
+  "countedAmount": zod.number().min(closeCashSessionBodyCountedAmountMin),
+  "note": zod.string().nullish()
+})
+
+export const CloseCashSessionResponse = zod.object({
+  "id": zod.string().uuid(),
+  "openedAt": zod.coerce.date(),
+  "closedAt": zod.coerce.date().nullable(),
+  "openingAmount": zod.number(),
+  "expectedAmount": zod.number(),
+  "countedAmount": zod.number().nullable(),
+  "difference": zod.number().nullable(),
+  "note": zod.string().nullable()
+})
+
+
+/**
+ * @summary Browse recent audit events
+ */
+export const ListAuditLogResponseItem = zod.object({
+  "id": zod.string(),
+  "actorName": zod.string(),
+  "action": zod.string(),
+  "entity": zod.string(),
+  "details": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+})
+export const ListAuditLogResponse = zod.array(ListAuditLogResponseItem)
+
+
+/**
+ * @summary List customer collections and supplier payments
+ */
+export const ListSettlementsQueryParams = zod.object({
+  "direction": zod.enum(['receivable', 'payable']).optional()
+})
+
+export const ListSettlementsResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "direction": zod.enum(['receivable', 'payable']),
+  "contactId": zod.string().uuid(),
+  "contactName": zod.string(),
+  "amount": zod.number(),
+  "paymentMethod": zod.string(),
+  "note": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListSettlementsResponse = zod.array(ListSettlementsResponseItem)
+
+
+/**
+ * @summary Collect a customer balance or pay a supplier
+ */
+export const createSettlementBodyAmountExclusiveMin = 0;
+
+
+
+export const CreateSettlementBody = zod.object({
+  "direction": zod.enum(['receivable', 'payable']),
+  "contactId": zod.string().uuid(),
+  "amount": zod.number().gt(createSettlementBodyAmountExclusiveMin),
+  "paymentMethod": zod.enum(['cash', 'card', 'transfer']),
+  "note": zod.string().nullish()
+})
+
+export const CreateSettlementResponse = zod.object({
+  "id": zod.string().uuid(),
+  "direction": zod.enum(['receivable', 'payable']),
+  "contactId": zod.string().uuid(),
+  "contactName": zod.string(),
+  "amount": zod.number(),
+  "paymentMethod": zod.string(),
+  "note": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Income statement, cash, and receivable/payable totals
  */
 export const GetFinancialReportQueryParams = zod.object({
-  "from": zod.date(),
-  "to": zod.date()
+  "from": zod.coerce.date(),
+  "to": zod.coerce.date()
 })
 
 export const GetFinancialReportResponse = zod.object({

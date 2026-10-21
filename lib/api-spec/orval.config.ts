@@ -62,7 +62,7 @@ export default defineConfig({
           // the catalog installs zod 3. Pin to match the catalog.
           version: 3,
           coerce: {
-            query: ['boolean', 'number', 'string'],
+            query: ['boolean', 'number', 'string', 'date'],
             param: ['boolean', 'number', 'string'],
             body: ['bigint', 'date'],
             response: ['bigint', 'date'],

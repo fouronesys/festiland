@@ -35,6 +35,7 @@ import {
   postJournalEntry,
   systemAccountId,
 } from "../lib/accounting";
+import { AppError } from "../lib/appError";
 
 const router: IRouter = Router();
 
@@ -60,7 +61,7 @@ router.post(
     }
     const [rate] = await db
       .insert(taxRatesTable)
-      .values({ ...parsed.data, active: parsed.data.active ?? true })
+      .values({ ...parsed.data, active: parsed.data.active ?? false })
       .returning();
     res.status(201).json(CreateTaxRateResponse.parse(rate));
   },
@@ -185,7 +186,7 @@ router.post(
       const accounts = await tx.select({ id: accountsTable.id }).from(accountsTable);
       const available = new Set(accounts.map((account) => account.id));
       if (parsed.data.lines.some((line) => !available.has(line.accountId))) {
-        throw new Error("Uno de los renglones usa una cuenta inexistente.");
+        throw new AppError(400, "Uno de los renglones usa una cuenta inexistente.");
       }
       const created = await postJournalEntry(tx, {
         date: parsed.data.date.toISOString().slice(0, 10),
@@ -261,6 +262,15 @@ router.post(
     }
     const member = getMember(res);
     const result = await db.transaction(async (tx) => {
+      if (parsed.data.paymentMethod === "payable" && !parsed.data.supplierId) {
+        return { error: "Selecciona un proveedor para registrar una cuenta por pagar." as const };
+      }
+      if (parsed.data.supplierId) {
+        const [supplier] = await tx.select().from(contactsTable).where(and(
+          eq(contactsTable.id, parsed.data.supplierId), eq(contactsTable.kind, "supplier"),
+        ));
+        if (!supplier) return { error: "Selecciona un proveedor válido." as const };
+      }
       const [account] = await tx
         .select()
         .from(accountsTable)
@@ -374,7 +384,7 @@ router.get(
         code: account.code,
         name: account.name,
         type: account.type,
-        balance: await getAccountBalance(db, account.id),
+        balance: await getAccountBalance(db, account.id, to),
       })),
     );
     const balanceFor = (key: string) =>

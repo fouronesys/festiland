@@ -22,6 +22,10 @@ import type {
 import type {
   Account,
   AccountInput,
+  AuditEvent,
+  CashSession,
+  CashSessionCloseInput,
+  CashSessionInput,
   Contact,
   ContactInput,
   Dashboard,
@@ -37,6 +41,7 @@ import type {
   ListCustomersParams,
   ListProductsParams,
   ListSalesParams,
+  ListSettlementsParams,
   ListSuppliersParams,
   Product,
   ProductInput,
@@ -46,6 +51,10 @@ import type {
   RefundInput,
   Sale,
   SaleInput,
+  Settlement,
+  SettlementInput,
+  StoreSettings,
+  StoreSettingsUpdate,
   TaxRate,
   TaxRateInput,
   TaxRateUpdate,
@@ -2256,6 +2265,674 @@ export const useCreatePurchase = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreatePurchaseMutationOptions(options));
+    }
+
+export const getGetStoreSettingsUrl = () => {
+
+
+
+
+  return `/api/store-settings`
+}
+
+/**
+ * @summary Get shared business and receipt settings
+ */
+export const getStoreSettings = async ( options?: Parameters<typeof customFetch>[1]): Promise<StoreSettings> => {
+
+  return customFetch<StoreSettings>(getGetStoreSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetStoreSettingsQueryKey = () => {
+    return [
+    `/api/store-settings`
+    ] as const;
+    }
+
+
+export const getGetStoreSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getStoreSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getStoreSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetStoreSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getStoreSettings>>> = ({ signal }) => getStoreSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getStoreSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetStoreSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getStoreSettings>>>
+export type GetStoreSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get shared business and receipt settings
+ */
+
+export function useGetStoreSettings<TData = Awaited<ReturnType<typeof getStoreSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getStoreSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetStoreSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateStoreSettingsUrl = () => {
+
+
+
+
+  return `/api/store-settings`
+}
+
+/**
+ * @summary Save shared business settings and accounting period lock
+ */
+export const updateStoreSettings = async (storeSettingsUpdate: StoreSettingsUpdate, options?: Parameters<typeof customFetch>[1]): Promise<StoreSettings> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<StoreSettings>(getUpdateStoreSettingsUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(storeSettingsUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateStoreSettingsMutationKey = () => ['updateStoreSettings'] as const;
+
+export const getUpdateStoreSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateStoreSettings>>, TError,UpdateStoreSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateStoreSettings>>, TError,UpdateStoreSettingsMutationVariables, TContext> => {
+
+const mutationKey = getUpdateStoreSettingsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateStoreSettings>>, UpdateStoreSettingsMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateStoreSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateStoreSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateStoreSettings>>>
+    export type UpdateStoreSettingsMutationBody = BodyType<StoreSettingsUpdate>
+    export type UpdateStoreSettingsMutationError = ErrorType<unknown>
+    export type UpdateStoreSettingsMutationVariables = {data: BodyType<StoreSettingsUpdate>}
+
+    /**
+ * @summary Save shared business settings and accounting period lock
+ */
+export const useUpdateStoreSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateStoreSettings>>, TError,UpdateStoreSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateStoreSettings>>,
+        TError,
+        UpdateStoreSettingsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateStoreSettingsMutationOptions(options));
+    }
+
+export const getListCashSessionsUrl = () => {
+
+
+
+
+  return `/api/cash-sessions`
+}
+
+/**
+ * @summary List the cashier's cash sessions
+ */
+export const listCashSessions = async ( options?: Parameters<typeof customFetch>[1]): Promise<CashSession[]> => {
+
+  return customFetch<CashSession[]>(getListCashSessionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCashSessionsQueryKey = () => {
+    return [
+    `/api/cash-sessions`
+    ] as const;
+    }
+
+
+export const getListCashSessionsQueryOptions = <TData = Awaited<ReturnType<typeof listCashSessions>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCashSessions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCashSessionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCashSessions>>> = ({ signal }) => listCashSessions({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCashSessions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCashSessionsQueryResult = NonNullable<Awaited<ReturnType<typeof listCashSessions>>>
+export type ListCashSessionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List the cashier's cash sessions
+ */
+
+export function useListCashSessions<TData = Awaited<ReturnType<typeof listCashSessions>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCashSessions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCashSessionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getOpenCashSessionUrl = () => {
+
+
+
+
+  return `/api/cash-sessions`
+}
+
+/**
+ * @summary Open a cash session using a physical opening count
+ */
+export const openCashSession = async (cashSessionInput: CashSessionInput, options?: Parameters<typeof customFetch>[1]): Promise<CashSession> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<CashSession>(getOpenCashSessionUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(cashSessionInput)
+  }
+);}
+
+
+
+
+
+export const getOpenCashSessionMutationKey = () => ['openCashSession'] as const;
+
+export const getOpenCashSessionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof openCashSession>>, TError,OpenCashSessionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof openCashSession>>, TError,OpenCashSessionMutationVariables, TContext> => {
+
+const mutationKey = getOpenCashSessionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof openCashSession>>, OpenCashSessionMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  openCashSession(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type OpenCashSessionMutationResult = NonNullable<Awaited<ReturnType<typeof openCashSession>>>
+    export type OpenCashSessionMutationBody = BodyType<CashSessionInput>
+    export type OpenCashSessionMutationError = ErrorType<unknown>
+    export type OpenCashSessionMutationVariables = {data: BodyType<CashSessionInput>}
+
+    /**
+ * @summary Open a cash session using a physical opening count
+ */
+export const useOpenCashSession = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof openCashSession>>, TError,OpenCashSessionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof openCashSession>>,
+        TError,
+        OpenCashSessionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getOpenCashSessionMutationOptions(options));
+    }
+
+export const getCloseCashSessionUrl = (sessionId: string,) => {
+
+
+
+
+  return `/api/cash-sessions/${sessionId}/close`
+}
+
+/**
+ * @summary Close a cash session and store the cash count difference
+ */
+export const closeCashSession = async (sessionId: string,
+    cashSessionCloseInput: CashSessionCloseInput, options?: Parameters<typeof customFetch>[1]): Promise<CashSession> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<CashSession>(getCloseCashSessionUrl(sessionId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(cashSessionCloseInput)
+  }
+);}
+
+
+
+
+
+export const getCloseCashSessionMutationKey = () => ['closeCashSession'] as const;
+
+export const getCloseCashSessionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof closeCashSession>>, TError,CloseCashSessionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof closeCashSession>>, TError,CloseCashSessionMutationVariables, TContext> => {
+
+const mutationKey = getCloseCashSessionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof closeCashSession>>, CloseCashSessionMutationVariables> = (props) => {
+          const {sessionId,data} = props ?? {};
+
+          return  closeCashSession(sessionId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CloseCashSessionMutationResult = NonNullable<Awaited<ReturnType<typeof closeCashSession>>>
+    export type CloseCashSessionMutationBody = BodyType<CashSessionCloseInput>
+    export type CloseCashSessionMutationError = ErrorType<unknown>
+    export type CloseCashSessionMutationVariables = {sessionId: string;data: BodyType<CashSessionCloseInput>}
+
+    /**
+ * @summary Close a cash session and store the cash count difference
+ */
+export const useCloseCashSession = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof closeCashSession>>, TError,CloseCashSessionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof closeCashSession>>,
+        TError,
+        CloseCashSessionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCloseCashSessionMutationOptions(options));
+    }
+
+export const getListAuditLogUrl = () => {
+
+
+
+
+  return `/api/audit-log`
+}
+
+/**
+ * @summary Browse recent audit events
+ */
+export const listAuditLog = async ( options?: Parameters<typeof customFetch>[1]): Promise<AuditEvent[]> => {
+
+  return customFetch<AuditEvent[]>(getListAuditLogUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAuditLogQueryKey = () => {
+    return [
+    `/api/audit-log`
+    ] as const;
+    }
+
+
+export const getListAuditLogQueryOptions = <TData = Awaited<ReturnType<typeof listAuditLog>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAuditLog>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAuditLogQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAuditLog>>> = ({ signal }) => listAuditLog({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAuditLog>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAuditLogQueryResult = NonNullable<Awaited<ReturnType<typeof listAuditLog>>>
+export type ListAuditLogQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Browse recent audit events
+ */
+
+export function useListAuditLog<TData = Awaited<ReturnType<typeof listAuditLog>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAuditLog>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAuditLogQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListSettlementsUrl = (params?: ListSettlementsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/settlements?${stringifiedParams}` : `/api/settlements`
+}
+
+/**
+ * @summary List customer collections and supplier payments
+ */
+export const listSettlements = async (params?: ListSettlementsParams, options?: Parameters<typeof customFetch>[1]): Promise<Settlement[]> => {
+
+  return customFetch<Settlement[]>(getListSettlementsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListSettlementsQueryKey = (params?: ListSettlementsParams,) => {
+    return [
+    `/api/settlements`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListSettlementsQueryOptions = <TData = Awaited<ReturnType<typeof listSettlements>>, TError = ErrorType<unknown>>(params?: ListSettlementsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSettlements>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListSettlementsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSettlements>>> = ({ signal }) => listSettlements(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listSettlements>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListSettlementsQueryResult = NonNullable<Awaited<ReturnType<typeof listSettlements>>>
+export type ListSettlementsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List customer collections and supplier payments
+ */
+
+export function useListSettlements<TData = Awaited<ReturnType<typeof listSettlements>>, TError = ErrorType<unknown>>(
+ params?: ListSettlementsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSettlements>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListSettlementsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateSettlementUrl = () => {
+
+
+
+
+  return `/api/settlements`
+}
+
+/**
+ * @summary Collect a customer balance or pay a supplier
+ */
+export const createSettlement = async (settlementInput: SettlementInput, options?: Parameters<typeof customFetch>[1]): Promise<Settlement> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<Settlement>(getCreateSettlementUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(settlementInput)
+  }
+);}
+
+
+
+
+
+export const getCreateSettlementMutationKey = () => ['createSettlement'] as const;
+
+export const getCreateSettlementMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSettlement>>, TError,CreateSettlementMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createSettlement>>, TError,CreateSettlementMutationVariables, TContext> => {
+
+const mutationKey = getCreateSettlementMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createSettlement>>, CreateSettlementMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createSettlement(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateSettlementMutationResult = NonNullable<Awaited<ReturnType<typeof createSettlement>>>
+    export type CreateSettlementMutationBody = BodyType<SettlementInput>
+    export type CreateSettlementMutationError = ErrorType<unknown>
+    export type CreateSettlementMutationVariables = {data: BodyType<SettlementInput>}
+
+    /**
+ * @summary Collect a customer balance or pay a supplier
+ */
+export const useCreateSettlement = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSettlement>>, TError,CreateSettlementMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createSettlement>>,
+        TError,
+        CreateSettlementMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateSettlementMutationOptions(options));
     }
 
 export const getGetFinancialReportUrl = (params: GetFinancialReportParams,) => {
