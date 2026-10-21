@@ -23,6 +23,7 @@ import type {
   Account,
   AccountInput,
   AuditEvent,
+  AuthSession,
   CashSession,
   CashSessionCloseInput,
   CashSessionInput,
@@ -43,6 +44,9 @@ import type {
   ListSalesParams,
   ListSettlementsParams,
   ListSuppliersParams,
+  LoginInput,
+  PasswordChangeInput,
+  PasswordResetInput,
   Product,
   ProductInput,
   ProductUpdate,
@@ -55,11 +59,11 @@ import type {
   SettlementInput,
   StoreSettings,
   StoreSettingsUpdate,
+  SuccessMessage,
   TaxRate,
   TaxRateInput,
   TaxRateUpdate,
-  TeamInvite,
-  TeamInviteInput,
+  TeamAccountInput,
   TeamRoleInput,
   TeamUser
 } from './api.schemas';
@@ -3185,18 +3189,95 @@ export const useUpdateTeamRole = <TError = ErrorType<unknown>,
       return useMutation(getUpdateTeamRoleMutationOptions(options));
     }
 
-export const getInviteTeamMemberUrl = () => {
+export const getGetAuthSessionUrl = () => {
 
 
 
 
-  return `/api/team/invitations`
+  return `/api/auth/session`
 }
 
 /**
- * @summary Invite a staff member by email
+ * @summary Get the current local session
  */
-export const inviteTeamMember = async (teamInviteInput: TeamInviteInput, options?: Parameters<typeof customFetch>[1]): Promise<TeamInvite> => {
+export const getAuthSession = async ( options?: Parameters<typeof customFetch>[1]): Promise<AuthSession> => {
+
+  return customFetch<AuthSession>(getGetAuthSessionUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAuthSessionQueryKey = () => {
+    return [
+    `/api/auth/session`
+    ] as const;
+    }
+
+
+export const getGetAuthSessionQueryOptions = <TData = Awaited<ReturnType<typeof getAuthSession>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAuthSession>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAuthSessionQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAuthSession>>> = ({ signal }) => getAuthSession({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAuthSession>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAuthSessionQueryResult = NonNullable<Awaited<ReturnType<typeof getAuthSession>>>
+export type GetAuthSessionQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the current local session
+ */
+
+export function useGetAuthSession<TData = Awaited<ReturnType<typeof getAuthSession>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAuthSession>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAuthSessionQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getLoginUrl = () => {
+
+
+
+
+  return `/api/auth/login`
+}
+
+/**
+ * @summary Sign in locally with email and password
+ */
+export const login = async (loginInput: LoginInput, options?: Parameters<typeof customFetch>[1]): Promise<AuthSession> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -3212,12 +3293,12 @@ export const inviteTeamMember = async (teamInviteInput: TeamInviteInput, options
     }
     return headers;
   };
-return customFetch<TeamInvite>(getInviteTeamMemberUrl(),
+return customFetch<AuthSession>(getLoginUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(teamInviteInput)
+    body: JSON.stringify(loginInput)
   }
 );}
 
@@ -3225,13 +3306,13 @@ return customFetch<TeamInvite>(getInviteTeamMemberUrl(),
 
 
 
-export const getInviteTeamMemberMutationKey = () => ['inviteTeamMember'] as const;
+export const getLoginMutationKey = () => ['login'] as const;
 
-export const getInviteTeamMemberMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof inviteTeamMember>>, TError,InviteTeamMemberMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof inviteTeamMember>>, TError,InviteTeamMemberMutationVariables, TContext> => {
+export const getLoginMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof login>>, TError,LoginMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof login>>, TError,LoginMutationVariables, TContext> => {
 
-const mutationKey = getInviteTeamMemberMutationKey();
+const mutationKey = getLoginMutationKey();
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -3241,10 +3322,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof inviteTeamMember>>, InviteTeamMemberMutationVariables> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof login>>, LoginMutationVariables> = (props) => {
           const {data} = props ?? {};
 
-          return  inviteTeamMember(data,requestOptions)
+          return  login(data,requestOptions)
         }
 
 
@@ -3254,22 +3335,361 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type InviteTeamMemberMutationResult = NonNullable<Awaited<ReturnType<typeof inviteTeamMember>>>
-    export type InviteTeamMemberMutationBody = BodyType<TeamInviteInput>
-    export type InviteTeamMemberMutationError = ErrorType<unknown>
-    export type InviteTeamMemberMutationVariables = {data: BodyType<TeamInviteInput>}
+    export type LoginMutationResult = NonNullable<Awaited<ReturnType<typeof login>>>
+    export type LoginMutationBody = BodyType<LoginInput>
+    export type LoginMutationError = ErrorType<unknown>
+    export type LoginMutationVariables = {data: BodyType<LoginInput>}
 
     /**
- * @summary Invite a staff member by email
+ * @summary Sign in locally with email and password
  */
-export const useInviteTeamMember = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof inviteTeamMember>>, TError,InviteTeamMemberMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+export const useLogin = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof login>>, TError,LoginMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
-        Awaited<ReturnType<typeof inviteTeamMember>>,
+        Awaited<ReturnType<typeof login>>,
         TError,
-        InviteTeamMemberMutationVariables,
+        LoginMutationVariables,
         TContext
       > => {
-      return useMutation(getInviteTeamMemberMutationOptions(options));
+      return useMutation(getLoginMutationOptions(options));
+    }
+
+export const getLogoutUrl = () => {
+
+
+
+
+  return `/api/auth/logout`
+}
+
+/**
+ * @summary Revoke the current session
+ */
+export const logout = async ( options?: Parameters<typeof customFetch>[1]): Promise<SuccessMessage> => {
+
+  return customFetch<SuccessMessage>(getLogoutUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getLogoutMutationKey = () => ['logout'] as const;
+
+export const getLogoutMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof logout>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof logout>>, TError,void, TContext> => {
+
+const mutationKey = getLogoutMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof logout>>, void> = () => {
+
+
+          return  logout(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type LogoutMutationResult = NonNullable<Awaited<ReturnType<typeof logout>>>
+
+    export type LogoutMutationError = ErrorType<unknown>
+
+
+    /**
+ * @summary Revoke the current session
+ */
+export const useLogout = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof logout>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof logout>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getLogoutMutationOptions(options));
+    }
+
+export const getChangePasswordUrl = () => {
+
+
+
+
+  return `/api/auth/change-password`
+}
+
+/**
+ * @summary Change your local password and revoke prior sessions
+ */
+export const changePassword = async (passwordChangeInput: PasswordChangeInput, options?: Parameters<typeof customFetch>[1]): Promise<AuthSession> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AuthSession>(getChangePasswordUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(passwordChangeInput)
+  }
+);}
+
+
+
+
+
+export const getChangePasswordMutationKey = () => ['changePassword'] as const;
+
+export const getChangePasswordMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof changePassword>>, TError,ChangePasswordMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof changePassword>>, TError,ChangePasswordMutationVariables, TContext> => {
+
+const mutationKey = getChangePasswordMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof changePassword>>, ChangePasswordMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  changePassword(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ChangePasswordMutationResult = NonNullable<Awaited<ReturnType<typeof changePassword>>>
+    export type ChangePasswordMutationBody = BodyType<PasswordChangeInput>
+    export type ChangePasswordMutationError = ErrorType<unknown>
+    export type ChangePasswordMutationVariables = {data: BodyType<PasswordChangeInput>}
+
+    /**
+ * @summary Change your local password and revoke prior sessions
+ */
+export const useChangePassword = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof changePassword>>, TError,ChangePasswordMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof changePassword>>,
+        TError,
+        ChangePasswordMutationVariables,
+        TContext
+      > => {
+      return useMutation(getChangePasswordMutationOptions(options));
+    }
+
+export const getCreateTeamAccountUrl = () => {
+
+
+
+
+  return `/api/team/accounts`
+}
+
+/**
+ * @summary Create a local staff account with a temporary password
+ */
+export const createTeamAccount = async (teamAccountInput: TeamAccountInput, options?: Parameters<typeof customFetch>[1]): Promise<TeamUser> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<TeamUser>(getCreateTeamAccountUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(teamAccountInput)
+  }
+);}
+
+
+
+
+
+export const getCreateTeamAccountMutationKey = () => ['createTeamAccount'] as const;
+
+export const getCreateTeamAccountMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTeamAccount>>, TError,CreateTeamAccountMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createTeamAccount>>, TError,CreateTeamAccountMutationVariables, TContext> => {
+
+const mutationKey = getCreateTeamAccountMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createTeamAccount>>, CreateTeamAccountMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createTeamAccount(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateTeamAccountMutationResult = NonNullable<Awaited<ReturnType<typeof createTeamAccount>>>
+    export type CreateTeamAccountMutationBody = BodyType<TeamAccountInput>
+    export type CreateTeamAccountMutationError = ErrorType<unknown>
+    export type CreateTeamAccountMutationVariables = {data: BodyType<TeamAccountInput>}
+
+    /**
+ * @summary Create a local staff account with a temporary password
+ */
+export const useCreateTeamAccount = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTeamAccount>>, TError,CreateTeamAccountMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createTeamAccount>>,
+        TError,
+        CreateTeamAccountMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateTeamAccountMutationOptions(options));
+    }
+
+export const getResetTeamPasswordUrl = (userId: string,) => {
+
+
+
+
+  return `/api/team/${userId}/password`
+}
+
+/**
+ * @summary Set a temporary local password and revoke sessions
+ */
+export const resetTeamPassword = async (userId: string,
+    passwordResetInput: PasswordResetInput, options?: Parameters<typeof customFetch>[1]): Promise<SuccessMessage> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<SuccessMessage>(getResetTeamPasswordUrl(userId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(passwordResetInput)
+  }
+);}
+
+
+
+
+
+export const getResetTeamPasswordMutationKey = () => ['resetTeamPassword'] as const;
+
+export const getResetTeamPasswordMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetTeamPassword>>, TError,ResetTeamPasswordMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resetTeamPassword>>, TError,ResetTeamPasswordMutationVariables, TContext> => {
+
+const mutationKey = getResetTeamPasswordMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resetTeamPassword>>, ResetTeamPasswordMutationVariables> = (props) => {
+          const {userId,data} = props ?? {};
+
+          return  resetTeamPassword(userId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResetTeamPasswordMutationResult = NonNullable<Awaited<ReturnType<typeof resetTeamPassword>>>
+    export type ResetTeamPasswordMutationBody = BodyType<PasswordResetInput>
+    export type ResetTeamPasswordMutationError = ErrorType<unknown>
+    export type ResetTeamPasswordMutationVariables = {userId: string;data: BodyType<PasswordResetInput>}
+
+    /**
+ * @summary Set a temporary local password and revoke sessions
+ */
+export const useResetTeamPassword = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetTeamPassword>>, TError,ResetTeamPasswordMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resetTeamPassword>>,
+        TError,
+        ResetTeamPasswordMutationVariables,
+        TContext
+      > => {
+      return useMutation(getResetTeamPasswordMutationOptions(options));
     }
 

@@ -5,9 +5,7 @@
  * Festiland point of sale, inventory, and accounting API
  * OpenAPI spec version: 0.1.0
  */
-import type { TeamRole } from './teamRole';
 
-export interface TeamInviteInput {
-  email: string;
-  role: TeamRole;
+export interface SuccessMessage {
+  message: string;
 }

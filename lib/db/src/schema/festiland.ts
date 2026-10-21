@@ -1,6 +1,7 @@
 import {
   boolean,
   index,
+  integer,
   numeric,
   pgTable,
   text,
@@ -21,6 +22,34 @@ export const teamMembersTable = pgTable("festiland_team_members", {
   name: text("name").notNull(),
   role: text("role").notNull().default("cashier"),
   active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const localCredentialsTable = pgTable("festiland_local_credentials", {
+  userId: text("user_id").primaryKey().references(() => teamMembersTable.id, { onDelete: "cascade" }),
+  email: text("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  mustChangePassword: boolean("must_change_password").notNull().default(true),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const localSessionsTable = pgTable("festiland_local_sessions", {
+  tokenHash: text("token_hash").primaryKey(),
+  userId: text("user_id").notNull().references(() => localCredentialsTable.userId, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+}, table => [index("festiland_sessions_user").on(table.userId)]);
+
+export const loginAttemptsTable = pgTable("festiland_login_attempts", {
+  key: text("key").primaryKey(),
+  attempts: integer("attempts").notNull().default(0),
+  resetAt: timestamp("reset_at", { withTimezone: true }).notNull(),
+});
+
+export const authBootstrapTable = pgTable("festiland_auth_bootstrap", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

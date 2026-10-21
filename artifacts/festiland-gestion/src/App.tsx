@@ -1,12 +1,9 @@
 import { useMemo, useState } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
-import { ClerkProvider, SignIn, SignUp, Show, useClerk, useUser } from '@clerk/react';
-import { publishableKeyFromHost } from '@clerk/react/internal';
-import { shadcn } from '@clerk/themes';
 import { Route, Switch, Redirect, Router as WouterRouter, Link, useLocation } from 'wouter';
 import { useForm } from 'react-hook-form';
 import {
-  useGetMe, getGetMeQueryKey, useGetDashboard, getGetDashboardQueryKey,
+  useGetDashboard, getGetDashboardQueryKey,
   useListProducts, getListProductsQueryKey,
   useListSales, getListSalesQueryKey, useCreateSale, useRefundSale,
   useListInventoryAdjustments, getListInventoryAdjustmentsQueryKey, useCreateInventoryAdjustment,
@@ -18,7 +15,7 @@ import {
   useListJournalEntries, getListJournalEntriesQueryKey, useCreateJournalEntry,
   useListPurchases, getListPurchasesQueryKey, useCreatePurchase,
   useGetFinancialReport, getGetFinancialReportQueryKey,
-  useListTeam, getListTeamQueryKey, useUpdateTeamRole, useInviteTeamMember,
+  type TeamUser,
   useListSettlements, getListSettlementsQueryKey, useCreateSettlement,
 } from '@workspace/api-client-react';
 import {
@@ -38,32 +35,14 @@ import { SettingsPage } from '@/features/settings-page';
 import { CashBar } from '@/features/cash-panel';
 import { ProductEditor, TaxEditor } from '@/features/editors';
 import { useToast } from '@/hooks/use-toast';
+import { AuthProvider, AuthGate, SignInScreen, SignUpNotice, useAuth } from '@/features/local-auth';
+import { TeamPage } from '@/features/team-page';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 const queryClient = new QueryClient();
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
-const clerkPubKey = publishableKeyFromHost(window.location.hostname, import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
-const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
-const stripBase = (path: string) => basePath && path.startsWith(basePath) ? path.slice(basePath.length) || '/' : path;
-const clerkAppearance = {
-  theme: shadcn, cssLayerName: 'clerk',
-  options: { logoPlacement: 'inside' as const, logoLinkUrl: basePath || '/', logoImageUrl: `${window.location.origin}${basePath}/logo.svg` },
-  variables: { colorPrimary: '#bd4778', colorForeground: '#263d40', colorMutedForeground: '#738285', colorDanger: '#c44c48', colorBackground: '#fffdf8', colorInput: '#fffdf8', colorInputForeground: '#263d40', colorNeutral: '#dfd8ca', fontFamily: 'DM Sans', borderRadius: '0.8rem' },
-  elements: {
-    rootBox: 'w-full flex justify-center', cardBox: 'bg-[#fffdf8] rounded-2xl w-[440px] max-w-full overflow-hidden shadow-xl',
-    card: '!shadow-none !border-0 !bg-transparent !rounded-none', footer: '!shadow-none !border-0 !bg-transparent !rounded-none',
-    headerTitle: 'text-[#263d40] font-bold', headerSubtitle: 'text-[#738285]', socialButtonsBlockButtonText: 'text-[#263d40]',
-    formFieldLabel: 'text-[#263d40]', footerActionLink: 'text-[#bd4778]', footerActionText: 'text-[#738285]',
-    dividerText: 'text-[#738285]', identityPreviewEditButton: 'text-[#bd4778]', formFieldSuccessText: 'text-[#347f70]',
-    alertText: 'text-[#263d40]', logoBox: 'mb-4', logoImage: 'max-h-14', socialButtonsBlockButton: 'border-[#dfd8ca]',
-    formButtonPrimary: 'bg-[#bd4778] hover:bg-[#a73a68]', formFieldInput: 'border-[#dfd8ca] bg-[#fffdf8]',
-    footerAction: 'text-[#738285]', dividerLine: 'bg-[#dfd8ca]', alert: 'border-[#dfd8ca]',
-    otpCodeFieldInput: 'border-[#dfd8ca]', formFieldRow: 'mb-4', main: 'text-[#263d40]',
-  },
-};
-
 type Field = { name: string; label: string; type?: string; options?: string[]; required?: boolean; placeholder?: string };
 const routes = [
   { path: '/dashboard', label: 'Resumen', icon: LayoutDashboard, group: 'Inicio' },
@@ -87,14 +66,13 @@ const fieldSet: Record<string, Field[]> = {
   '/expenses': [{ name: 'description', label: 'Descripción', required: true }, { name: 'accountId', label: 'Cuenta contable', options: [] }, { name: 'amount', label: 'Monto (DOP)', type: 'number', required: true }, { name: 'paymentMethod', label: 'Método de pago', options: ['cash', 'card', 'transfer', 'payable'] }, { name: 'supplierId', label: 'Proveedor (opcional)', options: [] }, { name: 'note', label: 'Nota' }],
   '/accounting': [{ name: 'code', label: 'Código de cuenta', required: true }, { name: 'name', label: 'Nombre de cuenta', required: true }, { name: 'type', label: 'Tipo', options: ['asset', 'liability', 'equity', 'revenue', 'expense'] }],
   '/purchases': [{ name: 'supplierId', label: 'Proveedor', options: [] }, { name: 'productId', label: 'Producto', options: [] }, { name: 'quantity', label: 'Cantidad', type: 'number', required: true }, { name: 'unitCost', label: 'Costo unitario (DOP)', type: 'number', required: true }, { name: 'paymentMethod', label: 'Pago', options: ['cash', 'card', 'transfer', 'payable'] }, { name: 'note', label: 'Nota' }],
-  '/team': [{ name: 'email', label: 'Correo del equipo', type: 'email', required: true }, { name: 'role', label: 'Rol', options: ['manager', 'cashier', 'inventory', 'accountant'] }],
 };
 
 function Home() {
   return <main className="min-h-[100dvh] bg-[#f8f5ed] text-[#263d40]">
     <header className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
       <img src={`${basePath}/brand/festiland-logo.png`} className="h-14 w-14 object-cover rounded-full" alt="Festiland" />
-      <div className="flex gap-3"><Link href="/sign-in" className="rounded-xl px-4 py-2 text-sm font-semibold hover:bg-white/80" data-testid="link-signin">Iniciar sesión</Link><Link href="/sign-up" className="rounded-xl bg-[#bd4778] px-4 py-2 text-sm font-bold text-white" data-testid="link-signup">Crear cuenta</Link></div>
+      <div className="flex gap-3"><Link href="/sign-in" className="rounded-xl bg-[#bd4778] px-4 py-2 text-sm font-bold text-white" data-testid="link-signin">Iniciar sesión</Link></div>
     </header>
     <section className="mx-auto grid max-w-7xl items-center gap-12 px-6 pb-16 pt-6 md:grid-cols-[1.02fr_.98fr] md:pb-28">
       <div className="page-enter">
@@ -123,38 +101,15 @@ function Feature({ icon, title, body }: { icon: React.ReactNode; title: string; 
   return <article className="rounded-2xl border border-white/10 bg-white/[.06] p-6"><div className="grid h-11 w-11 place-items-center rounded-xl bg-[#f1d25d] text-[#214447]">{icon}</div><h3 className="mt-5 text-xl font-bold">{title}</h3><p className="mt-2 leading-6 text-white/65">{body}</p></article>;
 }
 
-function AuthScreen({ type }: { type: 'in' | 'up' }) {
-  return <main className="flex min-h-[100dvh] flex-col items-center justify-center gap-5 bg-[#f6f2e8] px-4 py-8"><Link href="/" className="flex items-center gap-2 font-bold text-[#214447]"><img src={`${basePath}/brand/festiland-logo.png`} className="h-12 w-12 rounded-full object-cover" alt="Festiland"/><span>Gestión</span></Link>{type === 'in' ? <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`}/> : <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`}/>}</main>;
-}
-
-function MeGate() {
-  const meQ = useGetMe({ query: { queryKey: getGetMeQueryKey(), retry: (count, err: any) => err?.status !== 403 && err?.status !== 401 && count < 2 } });
-  const { signOut } = useClerk();
-  if (meQ.isLoading) return <div className="grid min-h-[100dvh] place-items-center bg-[#f6f4ed]"><div className="w-full max-w-md p-6"><LoadingBlock/></div></div>;
-  if (meQ.isError || !meQ.data) {
-    const status = (meQ.error as any)?.status;
-    const pending = status === 403 || status === 401;
-    return <main className="grid min-h-[100dvh] place-items-center bg-[#f6f2e8] p-5"><section className="w-full max-w-md rounded-[24px] bg-[#fffdf8] p-8 text-center shadow-xl" data-testid="screen-access-pending">
-      <img src={`${basePath}/brand/festiland-logo.png`} alt="Festiland" className="mx-auto h-20 w-20 rounded-full object-cover"/>
-      <h1 className="mt-4 text-2xl font-bold">{pending ? 'Acceso pendiente' : 'No pudimos verificar tu acceso'}</h1>
-      <p className="mt-2 text-sm leading-6 text-[#748381]">{pending ? 'Tu cuenta aún no ha sido invitada al equipo de Festiland. Pide al propietario o a la gerencia que te envíe una invitación a este mismo correo y vuelve a entrar.' : 'Comprueba tu conexión e inténtalo de nuevo.'}</p>
-      <div className="mt-6 flex flex-col gap-2">{!pending && <Button onClick={() => meQ.refetch()} className="bg-[#bd4778]" data-testid="button-retry-me">Reintentar</Button>}<Button variant="outline" onClick={() => signOut({ redirectUrl: basePath || '/' })} data-testid="button-signout-pending">Cerrar sesión</Button></div>
-    </section></main>;
-  }
-  if (!meQ.data.active) return <main className="grid min-h-[100dvh] place-items-center bg-[#f6f2e8] p-5"><section className="max-w-md rounded-[24px] bg-[#fffdf8] p-8 text-center shadow-xl" data-testid="screen-access-inactive"><h1 className="text-2xl font-bold">Cuenta desactivada</h1><p className="mt-2 text-sm text-[#748381]">Tu acceso fue desactivado. Contacta al propietario del comercio.</p><Button variant="outline" className="mt-5" onClick={() => signOut({ redirectUrl: basePath || '/' })}>Cerrar sesión</Button></section></main>;
-  return <AppShell me={meQ.data}/>;
-}
-
-function AppShell({ me }: { me: { id: string; name: string; email: string; role: Role; active: boolean } }) {
+function AppShell({ me }: { me: TeamUser }) {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState(false);
   const { toast } = useToast();
   const qc = useQueryClient();
-  const { signOut } = useClerk();
-  const { user } = useUser();
-  const role = me.role;
+  const { logout, loggingOut } = useAuth();
+  const role: Role = me.role;
   const fin = can.finance(role);
   const [editingProduct, setEditingProduct] = useState<any>(undefined);
   const [editingTax, setEditingTax] = useState<any>(undefined);
@@ -164,7 +119,7 @@ function AppShell({ me }: { me: { id: string; name: string; email: string; role:
   const salesQ = useListSales(searchParams, { query: { queryKey: getListSalesQueryKey(searchParams) } });
   const adjustmentsQ = useListInventoryAdjustments({ query: { queryKey: getListInventoryAdjustmentsQueryKey(), enabled: can.route(role, '/inventory') } });
   const customersQ = useListCustomers(searchParams, { query: { queryKey: getListCustomersQueryKey(searchParams) } });
-  const suppliersQ = useListSuppliers(searchParams, { query: { queryKey: getListSuppliersQueryKey(searchParams) } });
+  const suppliersQ = useListSuppliers(searchParams, { query: { queryKey: getListSuppliersQueryKey(searchParams), enabled: can.route(role, '/suppliers') } });
   const taxesQ = useListTaxRates({ query: { queryKey: getListTaxRatesQueryKey() } });
   const expensesQ = useListExpenses({ query: { queryKey: getListExpensesQueryKey(), enabled: fin } });
   const accountsQ = useListAccounts({ query: { queryKey: getListAccountsQueryKey(), enabled: fin } });
@@ -172,21 +127,20 @@ function AppShell({ me }: { me: { id: string; name: string; email: string; role:
   const purchasesQ = useListPurchases({ query: { queryKey: getListPurchasesQueryKey(), enabled: can.purchases(role) } });
   const [range, setRange] = useState(() => ({ from: todayDO().slice(0, 8) + '01', to: todayDO() }));
   const reportQ = useGetFinancialReport(range, { query: { queryKey: getGetFinancialReportQueryKey(range), enabled: fin && !!range.from && !!range.to && range.from <= range.to } });
-  const teamQ = useListTeam({ query: { queryKey: getListTeamQueryKey(), enabled: can.team(role) } });
   
   const createSale = useCreateSale(); const refundSale = useRefundSale();
   const createAdjustment = useCreateInventoryAdjustment(); const createCustomer = useCreateCustomer();
   const createSupplier = useCreateSupplier(); const updateTax = useUpdateTaxRate();
   const createExpense = useCreateExpense(); const createAccount = useCreateAccount();
   const createJournal = useCreateJournalEntry(); const createPurchase = useCreatePurchase();
-  const updateTeam = useUpdateTeamRole(); const inviteTeam = useInviteTeamMember();
+ 
   const invalidate = async (...keys: (readonly unknown[])[]) => Promise.all(keys.map(queryKey => qc.invalidateQueries({ queryKey })));
   const activePath = location === '/' ? homeFor(role) : location;
   const title = routes.find(item => item.path === activePath)?.label || 'Festiland';
   const form = useForm<Record<string, any>>({ defaultValues: { productType: 'product', unit: 'unidad', reason: 'count', paymentMethod: 'cash', type: 'asset', role: 'cashier' } });
   const currentFields = fieldSet[activePath] || [];
-  const addLabel: Record<string, string> = { '/products': 'Agregar producto', '/inventory': 'Registrar movimiento', '/customers': 'Nuevo cliente', '/suppliers': 'Nuevo proveedor', '/taxes': 'Crear tasa', '/expenses': 'Registrar gasto', '/accounting': 'Nueva cuenta', '/purchases': 'Nueva compra', '/team': 'Invitar integrante' };
-  const allowedAdd: Record<string, boolean> = { '/products': can.editProducts(role), '/inventory': can.adjustInventory(role), '/customers': can.createCustomer(role), '/suppliers': can.createSupplier(role), '/taxes': can.editTaxes(role), '/expenses': fin, '/accounting': can.postJournal(role), '/purchases': can.purchases(role), '/team': can.team(role) };
+  const addLabel: Record<string, string> = { '/products': 'Agregar producto', '/inventory': 'Registrar movimiento', '/customers': 'Nuevo cliente', '/suppliers': 'Nuevo proveedor', '/taxes': 'Crear tasa', '/expenses': 'Registrar gasto', '/accounting': 'Nueva cuenta', '/purchases': 'Nueva compra' };
+  const allowedAdd: Record<string, boolean> = { '/products': can.editProducts(role), '/inventory': can.adjustInventory(role), '/customers': can.createCustomer(role), '/suppliers': can.createSupplier(role), '/taxes': can.editTaxes(role), '/expenses': fin, '/accounting': can.postJournal(role), '/purchases': can.purchases(role) };
 
   const submitModal = form.handleSubmit(async values => {
     try {
@@ -208,17 +162,14 @@ function AppShell({ me }: { me: { id: string; name: string; email: string; role:
       } else if (activePath === '/purchases') {
         await createPurchase.mutateAsync({ data: { supplierId: values.supplierId, items: [{ productId: values.productId, quantity: Number(values.quantity), unitCost: Number(values.unitCost) }], paymentMethod: values.paymentMethod || 'cash', note: values.note || null } } as any);
         await invalidate(getListPurchasesQueryKey(), getListProductsQueryKey(), getListAccountsQueryKey());
-      } else if (activePath === '/team') {
-        await inviteTeam.mutateAsync({ data: { email: values.email, role: values.role } } as any);
-        await invalidate(getListTeamQueryKey());
       }
-      toast({ title: activePath === '/team' ? 'Invitación enviada' : 'Cambios guardados', description: 'La información quedó actualizada.' });
+      toast({ title: 'Cambios guardados', description: 'La información quedó actualizada.' });
       setModal(false); form.reset();
     } catch {
       toast({ title: 'No se pudo guardar', description: 'Revisa los datos e inténtalo de nuevo.', variant: 'destructive' });
     }
   });
-  const busy = createAdjustment.isPending || createCustomer.isPending || createSupplier.isPending || createExpense.isPending || createAccount.isPending || createPurchase.isPending || inviteTeam.isPending;
+  const busy = createAdjustment.isPending || createCustomer.isPending || createSupplier.isPending || createExpense.isPending || createAccount.isPending || createPurchase.isPending;
   const openModal = () => {
     if (activePath === '/products') { setEditingProduct(null); return; }
     if (activePath === '/taxes') { setEditingTax(null); return; }
@@ -239,7 +190,6 @@ function AppShell({ me }: { me: { id: string; name: string; email: string; role:
       case '/purchases': return { query: purchasesQ, rows: purchasesQ.data || [], columns: ['Proveedor', 'Fecha', 'Artículos', 'Total', 'Estado'] };
       case '/expenses': return { query: expensesQ, rows: expensesQ.data || [], columns: ['Descripción', 'Proveedor', 'Cuenta', 'Fecha', 'Monto', 'Estado'] };
       case '/taxes': return { query: taxesQ, rows: taxesQ.data || [], columns: ['Tasa', 'Porcentaje', 'Modalidad', 'Estado'] };
-      case '/team': return { query: teamQ, rows: teamQ.data || [], columns: ['Integrante', 'Correo', 'Rol', 'Estado'] };
       default: return null;
     }
   };
@@ -252,7 +202,6 @@ function AppShell({ me }: { me: { id: string; name: string; email: string; role:
     if (activePath === '/purchases') return <tr key={row.id}><td><b>{row.supplierName}</b></td><td>{dateLabel(row.createdAt)}</td><td>{row.itemCount}</td><td className="font-semibold">{money(row.total)}</td><td><Status text={row.status === 'paid' ? 'Pagada' : 'Pendiente'} positive={row.status === 'paid'}/></td></tr>;
     if (activePath === '/expenses') return <tr key={row.id}><td><b>{row.description}</b></td><td>{row.supplierName || '—'}</td><td>{accounts.find((a: any) => a.id === row.accountId)?.name || '—'}</td><td>{dateLabel(row.createdAt)}</td><td>{money(row.amount)}</td><td><Status text={row.status === 'paid' ? 'Pagado' : 'Pendiente'} positive={row.status === 'paid'}/></td></tr>;
     if (activePath === '/taxes') return <tr key={row.id}><td><b>{row.name}</b></td><td>{row.rate}%</td><td>{row.inclusive ? 'Incluido en precio' : 'Adicional'}</td><td><div className="flex items-center gap-3">{can.editTaxes(role) ? <button className="text-xs font-bold" onClick={() => updateTax.mutate({ taxRateId: row.id, data: { active: !row.active } }, { onSuccess: () => invalidate(getListTaxRatesQueryKey(), getListProductsQueryKey()) })} aria-label={row.active ? 'Desactivar tasa' : 'Activar tasa'} data-testid={`button-toggle-tax-${row.id}`}><Status text={row.active ? 'Activa' : 'Inactiva'} positive={row.active}/></button> : <Status text={row.active ? 'Activa' : 'Inactiva'} positive={row.active}/>}{can.editTaxes(role) && <button className="text-xs font-bold text-[#bd4778]" onClick={() => setEditingTax(row)} data-testid={`button-edit-tax-${row.id}`}>Editar</button>}</div></td></tr>;
-    if (activePath === '/team') return <tr key={row.id}><td><b>{row.name || row.email}</b></td><td>{row.email}</td><td><select disabled={!can.changeRoles(role) || row.id === me.id} aria-label="Rol de integrante" className="rounded-lg border border-border bg-card px-2 py-1 text-sm" value={row.role} onChange={e => updateTeam.mutate({ userId: row.id, data: { role: e.target.value } } as any, { onSuccess: () => invalidate(getListTeamQueryKey()), onError: () => toast({ title: 'No se pudo cambiar el rol', variant: 'destructive' }) })} data-testid={`select-role-${row.id}`}>{['owner', 'manager', 'cashier', 'inventory', 'accountant'].map(role => <option key={role} value={role}>{roleName(role)}</option>)}</select></td><td><Status text={row.active ? 'Activo' : 'Inactivo'} positive={row.active}/></td></tr>;
     return <tr key={row.id || i}><td>{row.name || '—'}</td></tr>;
   });
 
@@ -260,7 +209,7 @@ function AppShell({ me }: { me: { id: string; name: string; email: string; role:
     <aside className={`fixed inset-y-0 left-0 z-40 flex w-[258px] flex-col bg-[#214447] text-[#f6f3e9] transition-transform duration-300 md:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
       <div className="flex h-[82px] items-center justify-between border-b border-white/10 px-5"><Link href={homeFor(role)} className="flex items-center gap-3" data-testid="link-brand"><img src={`${basePath}/brand/festiland-logo.png`} alt="Festiland" className="h-12 w-12 rounded-full bg-white object-cover"/><span><strong className="block font-display text-lg leading-5">Festiland</strong><small className="text-xs text-white/55">GESTIÓN</small></span></Link><button className="md:hidden" onClick={() => setMobileOpen(false)} aria-label="Cerrar menú"><X/></button></div>
       <nav className="flex-1 overflow-y-auto px-3 py-5">{['Inicio', 'Ventas', 'Catálogo', 'Contactos', 'Operación', 'Finanzas', 'Administración'].filter(group => routes.some(r => r.group === group && can.route(role, r.path))).map(group => <div key={group} className="mb-5"><p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[.18em] text-white/40">{group}</p>{routes.filter(item => item.group === group && can.route(role, item.path)).map(item => <Link key={item.path} href={item.path} onClick={() => setMobileOpen(false)} data-testid={`nav-${item.path.slice(1)}`} className={`mb-1 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${activePath === item.path ? 'bg-[#f6d76a] text-[#214447]' : 'text-white/75 hover:bg-white/10 hover:text-white'}`}><item.icon size={18} strokeWidth={1.8}/>{item.label}{item.path === '/pos' && <span className="ml-auto rounded-md bg-[#bd4778] px-1.5 py-0.5 text-[9px] text-white">POS</span>}</Link>)}</div>)}</nav>
-      <div className="border-t border-white/10 p-4"><div className="mb-3 flex items-center gap-3 rounded-xl bg-white/[.07] p-3"><div className="grid h-9 w-9 place-items-center rounded-full bg-[#d96891] font-bold text-white">{(me.name || user?.firstName || me.email || 'F').slice(0, 1).toUpperCase()}</div><div className="min-w-0"><b className="block truncate text-sm">{me.name || user?.fullName || me.email}</b><small className="text-white/55">{roleName(role)}</small></div></div><button onClick={() => signOut({ redirectUrl: basePath || '/' })} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/65 hover:bg-white/10" data-testid="button-signout"><LogOut size={16}/>Cerrar sesión</button></div>
+      <div className="border-t border-white/10 p-4"><div className="mb-3 flex items-center gap-3 rounded-xl bg-white/[.07] p-3"><div className="grid h-9 w-9 place-items-center rounded-full bg-[#d96891] font-bold text-white">{(me.name || me.email || 'F').slice(0, 1).toUpperCase()}</div><div className="min-w-0"><b className="block truncate text-sm">{me.name || me.email}</b><small className="text-white/55">{roleName(role)}</small></div></div><button disabled={loggingOut} onClick={() => logout()} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/65 hover:bg-white/10" data-testid="button-signout"><LogOut size={16}/>Cerrar sesión</button></div>
     </aside>
     {mobileOpen && <button aria-label="Cerrar navegación" onClick={() => setMobileOpen(false)} className="fixed inset-0 z-30 bg-[#143437]/40 md:hidden"/>}
     <div className="min-h-[100dvh] md:pl-[258px]">
@@ -275,6 +224,7 @@ function AppShell({ me }: { me: { id: string; name: string; email: string; role:
         {activePath === '/pos' && <PosPage products={products} productsLoading={productsQ.isLoading} customers={customers} taxRates={taxesQ.data || []} createSale={createSale} invalidate={invalidate} toast={toast}/>}
         {activePath === '/accounting' && <AccountingPage role={role} accounts={accounts} journals={journalQ.data || []} report={reportQ.data} reportQ={reportQ} range={range} setRange={setRange} loading={accountsQ.isLoading} accountsError={accountsQ.isError} retry={accountsQ.refetch} onAdd={openModal} createJournal={createJournal} invalidate={invalidate}/>}
         {activePath === '/settings' && <SettingsPage role={role}/>}
+        {activePath === '/team' && <TeamPage me={me}/>}
         {dataForPage() && <section>
           <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-sm font-medium text-[#82908f]">{subtitle(activePath)}</p><h2 className="mt-1 text-3xl font-bold">{title}</h2></div><div className="flex gap-2"><label className="relative flex-1 sm:w-64"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#879291]" size={17}/><Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." className="h-11 border-[#e3ddd1] bg-white pl-10" data-testid="input-search"/></label>{addLabel[activePath] && allowedAdd[activePath] && <Button onClick={openModal} className="h-11 gap-2 bg-[#bd4778] hover:bg-[#a83968]" data-testid="button-create"><Plus size={17}/><span className="hidden sm:inline">{addLabel[activePath]}</span><span className="sm:hidden">Agregar</span></Button>}</div></div>
           {activePath === '/products' && <div className="mb-5 grid gap-3 sm:grid-cols-3"><MiniStat label="Productos activos" value={String(products.filter((p: any) => p.active).length)}/><MiniStat label="Por reponer" value={String(products.filter((p: any) => p.stock <= p.minStock).length)} tone="pink"/><MiniStat label="Categorías" value={String(new Set(products.map((p: any) => p.category)).size)}/></div>}
@@ -547,25 +497,26 @@ function paymentName(value: string) { return ({ cash: 'Efectivo', card: 'Tarjeta
 function typeName(value: string) { return ({ asset: 'Activo', liability: 'Pasivo', equity: 'Patrimonio', revenue: 'Ingreso', expense: 'Gasto' } as any)[value] || value; }
 function subtitle(path: string) { return ({ '/products': 'Un catálogo organizado, listo para la caja', '/sales': 'Recibos y devoluciones', '/inventory': 'Existencias y movimientos', '/customers': 'Personas que celebran contigo', '/suppliers': 'Socios que hacen posible la tienda', '/purchases': 'Abastecimiento y recepción', '/expenses': 'Salidas de caja del comercio', '/taxes': 'Configura las tasas aplicables', '/team': 'Accesos y responsabilidades' } as any)[path] || 'Operación del comercio'; }
 
-function RootRedirect() {
-  return <><Show when="signed-in"><Redirect to="/dashboard"/></Show><Show when="signed-out"><Home/></Show></>;
+function RootRoute() {
+  const { session, loading } = useAuth();
+  if (loading) return <div className="min-h-[100dvh] bg-[#f8f5ed]"/>;
+  return session?.user ? <Redirect to="/dashboard" replace/> : <Home/>;
 }
 function ProtectedShell() {
-  return <><Show when="signed-in"><MeGate/></Show><Show when="signed-out"><Redirect to="/"/></Show></>;
+  return <AuthGate>{user => <AppShell me={user}/>}</AuthGate>;
 }
-function ClerkRoutes() {
-  const [, setLocation] = useLocation();
-  return <ClerkProvider publishableKey={clerkPubKey} proxyUrl={clerkProxyUrl} appearance={clerkAppearance} signInUrl={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} localization={{ signIn: { start: { title: 'Qué bueno verte', subtitle: 'Inicia sesión para continuar con tu tienda' } }, signUp: { start: { title: 'Abre tu espacio Festiland', subtitle: 'Crea tu acceso para gestionar el comercio' } } }} routerPush={to => setLocation(stripBase(to))} routerReplace={to => setLocation(stripBase(to), { replace: true })}>
+function AppRoutes() {
+  return <AuthProvider>
     <Switch>
-      <Route path="/" component={RootRedirect}/>
-      <Route path="/sign-in/*?" component={() => <AuthScreen type="in"/>}/>
-      <Route path="/sign-up/*?" component={() => <AuthScreen type="up"/>}/>
+      <Route path="/" component={RootRoute}/>
+      <Route path="/sign-in/*?" component={SignInScreen}/>
+      <Route path="/sign-up/*?" component={SignUpNotice}/>
       {routes.map(route => <Route key={route.path} path={route.path} component={ProtectedShell}/>)}
-      <Route component={() => <main className="grid min-h-[100dvh] place-items-center bg-[#f6f4ed] p-5"><div className="text-center"><h1 className="text-4xl font-bold">Esta página no está aquí</h1><p className="my-3 text-[#788684]">Vuelve al resumen de Festiland.</p><Link href="/" className="font-bold text-[#bd4778]">Ir al inicio</Link></div></main>}/>
+      <Route component={() => <main className="grid min-h-[100dvh] place-items-center bg-[#f6f4ed] p-5"><div className="text-center"><h1 className="text-4xl font-bold">Esta página no está aquí</h1><p className="my-3 text-[#788684]">Vuelve al inicio de Festiland.</p><Link href="/" className="font-bold text-[#bd4778]">Ir al inicio</Link></div></main>}/>
     </Switch>
-  </ClerkProvider>;
+  </AuthProvider>;
 }
 function App() {
-  return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={basePath}><ErrorBoundary><ClerkRoutes/></ErrorBoundary></WouterRouter><Toaster/></TooltipProvider></QueryClientProvider>;
+  return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={basePath}><ErrorBoundary><AppRoutes/></ErrorBoundary></WouterRouter><Toaster/></TooltipProvider></QueryClientProvider>;
 }
 export default App;

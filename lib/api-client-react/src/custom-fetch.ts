@@ -359,10 +359,14 @@ export async function customFetch<T = unknown>(
   }
 
   const requestInfo = { method, url: resolveUrl(input) };
+  if (!["GET", "HEAD", "OPTIONS"].includes(method)) headers.set("x-festiland-request", "1");
 
-  const response = await fetch(input, { ...init, method, headers });
+  const response = await fetch(input, { credentials: "same-origin", ...init, method, headers });
 
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== "undefined" && !requestInfo.url.includes("/auth/")) {
+      window.dispatchEvent(new Event("festiland:unauthorized"));
+    }
     const errorData = await parseErrorBody(response, method);
     throw new ApiError(response, errorData, requestInfo);
   }

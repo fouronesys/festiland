@@ -24,7 +24,9 @@ export const GetMeResponse = zod.object({
   "email": zod.string(),
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cashier', 'inventory', 'accountant']),
-  "active": zod.boolean()
+  "active": zod.boolean(),
+  "hasLocalLogin": zod.boolean(),
+  "mustChangePassword": zod.boolean()
 })
 
 
@@ -899,7 +901,9 @@ export const ListTeamResponseItem = zod.object({
   "email": zod.string(),
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cashier', 'inventory', 'accountant']),
-  "active": zod.boolean()
+  "active": zod.boolean(),
+  "hasLocalLogin": zod.boolean(),
+  "mustChangePassword": zod.boolean()
 })
 export const ListTeamResponse = zod.array(ListTeamResponseItem)
 
@@ -921,22 +925,142 @@ export const UpdateTeamRoleResponse = zod.object({
   "email": zod.string(),
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cashier', 'inventory', 'accountant']),
-  "active": zod.boolean()
+  "active": zod.boolean(),
+  "hasLocalLogin": zod.boolean(),
+  "mustChangePassword": zod.boolean()
 })
 
 
 /**
- * @summary Invite a staff member by email
+ * @summary Get the current local session
  */
-export const InviteTeamMemberBody = zod.object({
-  "email": zod.string().email(),
+export const GetAuthSessionResponse = zod.object({
+  "user": zod.union([zod.object({
+  "id": zod.string(),
+  "email": zod.string(),
+  "name": zod.string(),
+  "role": zod.enum(['owner', 'manager', 'cashier', 'inventory', 'accountant']),
+  "active": zod.boolean(),
+  "hasLocalLogin": zod.boolean(),
+  "mustChangePassword": zod.boolean()
+}),zod.null()]),
+  "setupRequired": zod.boolean()
+})
+
+
+/**
+ * @summary Sign in locally with email and password
+ */
+export const loginBodyEmailMax = 254;
+
+export const loginBodyPasswordMax = 128;
+
+
+
+export const LoginBody = zod.object({
+  "email": zod.string().email().max(loginBodyEmailMax),
+  "password": zod.string().min(1).max(loginBodyPasswordMax)
+})
+
+export const LoginResponse = zod.object({
+  "user": zod.union([zod.object({
+  "id": zod.string(),
+  "email": zod.string(),
+  "name": zod.string(),
+  "role": zod.enum(['owner', 'manager', 'cashier', 'inventory', 'accountant']),
+  "active": zod.boolean(),
+  "hasLocalLogin": zod.boolean(),
+  "mustChangePassword": zod.boolean()
+}),zod.null()]),
+  "setupRequired": zod.boolean()
+})
+
+
+/**
+ * @summary Revoke the current session
+ */
+export const LogoutResponse = zod.object({
+  "message": zod.string()
+})
+
+
+/**
+ * @summary Change your local password and revoke prior sessions
+ */
+export const changePasswordBodyCurrentPasswordMax = 128;
+
+export const changePasswordBodyNewPasswordMin = 12;
+export const changePasswordBodyNewPasswordMax = 128;
+
+
+
+export const ChangePasswordBody = zod.object({
+  "currentPassword": zod.string().min(1).max(changePasswordBodyCurrentPasswordMax),
+  "newPassword": zod.string().min(changePasswordBodyNewPasswordMin).max(changePasswordBodyNewPasswordMax)
+})
+
+export const ChangePasswordResponse = zod.object({
+  "user": zod.union([zod.object({
+  "id": zod.string(),
+  "email": zod.string(),
+  "name": zod.string(),
+  "role": zod.enum(['owner', 'manager', 'cashier', 'inventory', 'accountant']),
+  "active": zod.boolean(),
+  "hasLocalLogin": zod.boolean(),
+  "mustChangePassword": zod.boolean()
+}),zod.null()]),
+  "setupRequired": zod.boolean()
+})
+
+
+/**
+ * @summary Create a local staff account with a temporary password
+ */
+export const createTeamAccountBodyEmailMax = 254;
+
+export const createTeamAccountBodyNameMax = 120;
+
+export const createTeamAccountBodyTemporaryPasswordMin = 12;
+export const createTeamAccountBodyTemporaryPasswordMax = 128;
+
+
+
+export const CreateTeamAccountBody = zod.object({
+  "email": zod.string().email().max(createTeamAccountBodyEmailMax),
+  "name": zod.string().min(1).max(createTeamAccountBodyNameMax),
+  "temporaryPassword": zod.string().min(createTeamAccountBodyTemporaryPasswordMin).max(createTeamAccountBodyTemporaryPasswordMax),
   "role": zod.enum(['owner', 'manager', 'cashier', 'inventory', 'accountant'])
 })
 
-export const InviteTeamMemberResponse = zod.object({
+export const CreateTeamAccountResponse = zod.object({
+  "id": zod.string(),
   "email": zod.string(),
+  "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cashier', 'inventory', 'accountant']),
-  "status": zod.string()
+  "active": zod.boolean(),
+  "hasLocalLogin": zod.boolean(),
+  "mustChangePassword": zod.boolean()
+})
+
+
+/**
+ * @summary Set a temporary local password and revoke sessions
+ */
+export const ResetTeamPasswordParams = zod.object({
+  "userId": zod.coerce.string()
+})
+
+export const resetTeamPasswordBodyTemporaryPasswordMin = 12;
+export const resetTeamPasswordBodyTemporaryPasswordMax = 128;
+
+
+
+export const ResetTeamPasswordBody = zod.object({
+  "temporaryPassword": zod.string().min(resetTeamPasswordBodyTemporaryPasswordMin).max(resetTeamPasswordBodyTemporaryPasswordMax)
+})
+
+export const ResetTeamPasswordResponse = zod.object({
+  "message": zod.string()
 })
 
 

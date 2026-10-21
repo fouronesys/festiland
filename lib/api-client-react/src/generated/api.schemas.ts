@@ -26,6 +26,8 @@ export interface TeamUser {
   name: string;
   role: TeamRole;
   active: boolean;
+  hasLocalLogin: boolean;
+  mustChangePassword: boolean;
 }
 
 export interface TeamRoleInput {
@@ -33,15 +35,60 @@ export interface TeamRoleInput {
   active?: boolean;
 }
 
-export interface TeamInviteInput {
-  email: string;
-  role: TeamRole;
+export interface AuthSession {
+  user: TeamUser | null;
+  setupRequired: boolean;
 }
 
-export interface TeamInvite {
+export interface LoginInput {
+  /** @maxLength 254 */
   email: string;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  password: string;
+}
+
+export interface PasswordChangeInput {
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  currentPassword: string;
+  /**
+     * @minLength 12
+     * @maxLength 128
+     */
+  newPassword: string;
+}
+
+export interface PasswordResetInput {
+  /**
+     * @minLength 12
+     * @maxLength 128
+     */
+  temporaryPassword: string;
+}
+
+export interface SuccessMessage {
+  message: string;
+}
+
+export interface TeamAccountInput {
+  /** @maxLength 254 */
+  email: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  name: string;
+  /**
+     * @minLength 12
+     * @maxLength 128
+     */
+  temporaryPassword: string;
   role: TeamRole;
-  status: string;
 }
 
 export type SaleStatus = typeof SaleStatus[keyof typeof SaleStatus];

@@ -14,7 +14,7 @@ Sistema de operación para una tienda de regalos y celebraciones en República D
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5; interfaz React + Vite; autenticación Clerk
+- API: Express 5; interfaz React + Vite; autenticación local con correo y contraseña, sesiones en PostgreSQL
 - DB: PostgreSQL + Drizzle ORM
 - Validation: Zod (`zod/v4`), `drizzle-zod`
 - API codegen: Orval (from OpenAPI spec)
@@ -29,7 +29,8 @@ Sistema de operación para una tienda de regalos y celebraciones en República D
 
 ## Architecture decisions
 
-- No conceder administración al primer registro público. El propietario se autoriza por un correo verificado configurado en `FESTILAND_OWNER_EMAIL`; el equipo entra por invitación. Aplicar la misma configuración en desarrollo y producción.
+- No hay registro público ni proveedor de identidad externo. El primer propietario se inicializa con `FESTILAND_OWNER_EMAIL` y el secreto `FESTILAND_INITIAL_OWNER_PASSWORD`; el equipo se crea con contraseñas temporales. No hay contraseñas predeterminadas. Conservar los identificadores y roles al migrar cuentas.
+- El destino de despliegue es CapRover: interfaz y servidor bajo un mismo dominio HTTPS. Consultar `docs/CAPROVER.md`; `Dockerfile` y `captain-definition` se mantienen en la raíz. No reintroducir Clerk ni depender de Replit para el acceso en producción.
 - Los cambios de inventario, ventas, devoluciones y asientos se guardan en una sola transacción para evitar estados parciales.
 - Valuación por costo promedio móvil, con precisión adicional en el costo unitario. No sustituirlo por el precio de la última compra sin revisar el libro de inventario.
 

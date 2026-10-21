@@ -13,4 +13,6 @@ export interface TeamUser {
   name: string;
   role: TeamRole;
   active: boolean;
+  hasLocalLogin: boolean;
+  mustChangePassword: boolean;
 }

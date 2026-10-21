@@ -592,22 +592,97 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/TeamUser" }
-  /team/invitations:
+  /auth/session:
+    get:
+      operationId: getAuthSession
+      tags: [auth]
+      summary: Get the current local session
+      responses:
+        "200":
+          description: Local session state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthSession" }
+  /auth/login:
     post:
-      operationId: inviteTeamMember
-      tags: [team]
-      summary: Invite a staff member by email
+      operationId: login
+      tags: [auth]
+      summary: Sign in locally with email and password
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/TeamInviteInput" }
+            schema: { $ref: "#/components/schemas/LoginInput" }
       responses:
-        "201":
-          description: Invitation sent
+        "200":
+          description: Signed in
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/TeamInvite" }
+              schema: { $ref: "#/components/schemas/AuthSession" }
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Revoke the current session
+      responses:
+        "200":
+          description: Signed out
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessMessage" }
+  /auth/change-password:
+    post:
+      operationId: changePassword
+      tags: [auth]
+      summary: Change your local password and revoke prior sessions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PasswordChangeInput" }
+      responses:
+        "200":
+          description: Password changed and session renewed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthSession" }
+  /team/accounts:
+    post:
+      operationId: createTeamAccount
+      tags: [team]
+      summary: Create a local staff account with a temporary password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TeamAccountInput" }
+      responses:
+        "201":
+          description: Local account created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TeamUser" }
+  /team/{userId}/password:
+    post:
+      operationId: resetTeamPassword
+      tags: [team]
+      summary: Set a temporary local password and revoke sessions
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PasswordResetInput" }
+      responses:
+        "200":
+          description: Temporary password assigned
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessMessage" }
 components:
   schemas:
     HealthStatus:
@@ -626,26 +701,54 @@ components:
         name: { type: string }
         role: { $ref: "#/components/schemas/TeamRole" }
         active: { type: boolean }
-      required: [id, email, name, role, active]
+        hasLocalLogin: { type: boolean }
+        mustChangePassword: { type: boolean }
+      required: [id, email, name, role, active, hasLocalLogin, mustChangePassword]
     TeamRoleInput:
       type: object
       properties:
         role: { $ref: "#/components/schemas/TeamRole" }
         active: { type: boolean }
       required: [role]
-    TeamInviteInput:
+    AuthSession:
       type: object
       properties:
-        email: { type: string, format: email }
-        role: { $ref: "#/components/schemas/TeamRole" }
-      required: [email, role]
-    TeamInvite:
+        user:
+          anyOf:
+            - { $ref: "#/components/schemas/TeamUser" }
+            - { type: "null" }
+        setupRequired: { type: boolean }
+      required: [user, setupRequired]
+    LoginInput:
       type: object
       properties:
-        email: { type: string }
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 1, maxLength: 128 }
+      required: [email, password]
+    PasswordChangeInput:
+      type: object
+      properties:
+        currentPassword: { type: string, minLength: 1, maxLength: 128 }
+        newPassword: { type: string, minLength: 12, maxLength: 128 }
+      required: [currentPassword, newPassword]
+    PasswordResetInput:
+      type: object
+      properties:
+        temporaryPassword: { type: string, minLength: 12, maxLength: 128 }
+      required: [temporaryPassword]
+    SuccessMessage:
+      type: object
+      properties:
+        message: { type: string }
+      required: [message]
+    TeamAccountInput:
+      type: object
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        temporaryPassword: { type: string, minLength: 12, maxLength: 128 }
         role: { $ref: "#/components/schemas/TeamRole" }
-        status: { type: string }
-      required: [email, role, status]
+      required: [email, name, temporaryPassword, role]
     Dashboard:
       type: object
       properties:

@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { EmptyState, ErrorBlock, LoadingBlock, fieldClass, labelClass } from '@/components/states';
 import { can, dateLabel, dateTimeLabel, type Role } from '@/lib/access';
 import { useStoreSettings } from './receipt';
+import { ChangePasswordForm } from './local-auth';
 
 type StoreForm = { name: string; taxId: string; address: string; phone: string; receiptFooter: string; receiptPaper: '58mm' | '80mm' | 'A4' };
 
@@ -92,6 +93,12 @@ export function SettingsPage({ role }: { role?: Role }) {
       </div>
       {canLock && !can.reopenPeriod(role) && store?.lockedThrough && <p className="mt-2 text-xs text-[#967422]" data-testid="text-reopen-owner-only">Como contable puedes avanzar la fecha de cierre. Reabrir o retroceder un período cerrado solo lo puede hacer el propietario.</p>}
       <p className="mt-3 text-sm" data-testid="text-locked-through">Estado: <b>{store?.lockedThrough ? `bloqueado hasta ${dateLabel(store.lockedThrough + 'T12:00:00')}` : 'sin bloqueo'}</b></p>
+    </section>
+
+    <section className="rounded-2xl border border-[#e8e2d6] bg-white p-6" data-testid="section-change-password">
+      <h3 className="text-xl font-bold">Tu contraseña</h3>
+      <p className="mb-4 text-sm text-[#82908f]">Cámbiala cuando quieras. Las contraseñas no se guardan en este navegador.</p>
+      <ChangePasswordForm compact/>
     </section>
 
     {can.audit(role) && <AuditLog/>}

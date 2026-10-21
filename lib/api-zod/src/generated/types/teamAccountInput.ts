@@ -7,8 +7,18 @@
  */
 import type { TeamRole } from './teamRole';
 
-export interface TeamInvite {
+export interface TeamAccountInput {
+  /** @maxLength 254 */
   email: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  name: string;
+  /**
+     * @minLength 12
+     * @maxLength 128
+     */
+  temporaryPassword: string;
   role: TeamRole;
-  status: string;
 }

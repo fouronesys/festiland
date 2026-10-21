@@ -10,10 +10,12 @@ import salesRouter from "./sales";
 import teamRouter from "./team";
 import settlementsRouter from "./settlements";
 import storeRouter from "./store";
+import authRouter from "./auth";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(authRouter);
 router.use(requireMember);
 router.use(accountingRouter);
 router.use(contactsRouter);
